@@ -4064,4 +4064,8 @@ export const ITEM_DETAILS: Items = {
     image: scarabBeetle,
     description: "",
   },
+  "Trade Points": {
+    image: "",
+    description: COUPONS["Trade Points"].description,
+  },
 };

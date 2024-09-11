@@ -3624,5 +3624,6 @@
   "depositing": "Depositing",
   "listing": "Listing",
   "deleting.listing": "Deleting listing",
-  "selling": "Selling"
+  "selling": "Selling",
+  "description.trade.points": "Earned from trading collectibles and wearables in the marketplace. Can be exchanged for in-game rewards."
 }
