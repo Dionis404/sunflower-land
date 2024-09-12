@@ -340,6 +340,7 @@ export const INITIAL_FARM: GameState = {
   coins: 0,
   balance: new Decimal(0),
   previousBalance: new Decimal(0),
+  tradePoints: 0,
   inventory: {
     "Town Center": new Decimal(1),
     Market: new Decimal(1),
@@ -556,6 +557,7 @@ export const TEST_FARM: GameState = {
   coins: 0,
   balance: new Decimal(0),
   previousBalance: new Decimal(0),
+  tradePoints: 0,
   inventory: {
     Sunflower: new Decimal(5),
     Potato: new Decimal(12),
@@ -862,6 +864,7 @@ export const EMPTY: GameState = {
   coins: 0,
   balance: new Decimal(fromWei("0")),
   previousBalance: new Decimal(fromWei("0")),
+  tradePoints: 0,
   createdAt: new Date().getTime(),
   inventory: {
     "Chicken Coop": new Decimal(1),

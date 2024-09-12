@@ -9453,7 +9453,7 @@ export const OPEN_SEA_COLLECTIBLES: Record<InventoryItemName, Metadata> = {
     image: "../public/erc1155/images/2135.png",
     name: "Butterfly",
   },
-  "Trade Points": {
+  "Trade Point": {
     description:
       "Earned from trading collectibles and wearables in marketplace. Can be exchanged for in-game rewards",
     decimals: 0,
@@ -9463,7 +9463,7 @@ export const OPEN_SEA_COLLECTIBLES: Record<InventoryItemName, Metadata> = {
     ],
     external_url: "https://docs.sunflower-land.com/getting-started/about",
     image: "../public/erc1155/images/question_mark.png",
-    name: "Trade Points",
+    name: "Trade Point",
   },
 };
 

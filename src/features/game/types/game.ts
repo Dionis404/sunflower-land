@@ -201,7 +201,7 @@ export type Coupons =
   | "Farmhand"
   | "Prize Ticket"
   | "Mark"
-  | "Trade Points"
+  | "Trade Point"
   | Keys
   | SeasonalTicket
   | FactionEmblem;
@@ -308,7 +308,7 @@ export const COUPONS: Record<Coupons, { description: string }> = {
   Mark: {
     description: translate("description.faction.mark"),
   },
-  "Trade Points": {
+  "Trade Point": {
     description: translate("description.trade.points"),
   },
 };
@@ -1150,6 +1150,7 @@ export interface GameState {
 
   username?: string;
   coins: number;
+  tradePoints: number;
   balance: Decimal;
   previousBalance: Decimal;
   airdrops?: Airdrop[];
