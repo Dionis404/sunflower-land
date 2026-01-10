@@ -44,6 +44,7 @@ import { Revealed } from "features/game/components/Revealed";
 import { Label } from "components/ui/Label";
 import { getBumpkinHoliday } from "lib/utils/getSeasonWeek";
 import { useAppTranslation } from "lib/i18n/useAppTranslations";
+import i18n from "lib/i18n";
 import { Loading } from "features/auth/components";
 import { useNavigate } from "react-router";
 import { getBumpkinLevel } from "features/game/lib/level";
@@ -180,10 +181,23 @@ export const DeliveryOrders: React.FC<Props> = ({
   };
 
   const getLocationName = (npcName: NPCName) => {
-    if (RETREAT_BUMPKINS.includes(npcName)) return t("island.goblin.retreat");
-    if (BEACH_BUMPKINS.includes(npcName)) return t("island.beach");
-    if (KINGDOM_BUMPKINS.includes(npcName)) return t("island.kingdom");
-    return t("island.pumpkin.plaza");
+    if (RETREAT_BUMPKINS.includes(npcName)) return t("world.retreat");
+    if (BEACH_BUMPKINS.includes(npcName)) return t("world.beach");
+    if (KINGDOM_BUMPKINS.includes(npcName)) return t("world.kingdom");
+    return t("world.plaza");
+  };
+
+  const getPreposition = (location: string) => {
+    if (i18n.language === 'ru') {
+      const prepositions: Record<string, string> = {
+        [t("world.retreat")]: "в",
+        [t("world.beach")]: "на",
+        [t("world.kingdom")]: "в",
+        [t("world.plaza")]: "на",
+      };
+      return prepositions[location] || "в";
+    }
+    return "to";
   };
 
   if (gameService.getSnapshot().matches("revealing") && isRevealing) {
@@ -595,21 +609,11 @@ export const DeliveryOrders: React.FC<Props> = ({
                         }
                       }}
                     >
-                      {t("world.travelTo", {
-                        location: RETREAT_BUMPKINS.includes(
-                          previewOrder?.from as NPCName,
-                        )
-                          ? t("world.retreat")
-                          : BEACH_BUMPKINS.includes(
-                                previewOrder?.from as NPCName,
-                              )
-                            ? t("world.beach")
-                            : KINGDOM_BUMPKINS.includes(
-                                  previewOrder?.from as NPCName,
-                                )
-                              ? t("world.kingdom")
-                              : t("world.plaza"),
-                      })}
+                      {(() => {
+                        const location = getLocationName(previewOrder.from);
+                        const preposition = getPreposition(location);
+                        return t("world.travelTo", { preposition, location });
+                      })()}
                     </Button>
                   )}
               </div>
