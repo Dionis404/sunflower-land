@@ -74,7 +74,7 @@ export const FoodButtonPanel: React.FC<FoodButtonPanelProps> = ({
         {!locked && foodFed && (
           <img
             src={SUNNYSIDE.icons.confirm}
-            alt="Locked"
+            alt="Fed"
             className="absolute top-0 left-0 w-4 h-4 object-contain z-10"
           />
         )}
