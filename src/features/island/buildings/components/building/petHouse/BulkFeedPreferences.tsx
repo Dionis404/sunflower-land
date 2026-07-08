@@ -1,7 +1,9 @@
-import React from "react";
+import React, { useState } from "react";
+import classNames from "classnames";
 import { ButtonPanel } from "components/ui/Panel";
 import { Label } from "components/ui/Label";
 import { Button } from "components/ui/Button";
+import { TextInput } from "components/ui/TextInput";
 import { SUNNYSIDE } from "assets/sunnyside";
 import { ITEM_DETAILS } from "features/game/types/images";
 import { FOOD_TO_DIFFICULTY } from "features/game/events/pets/feedPet";
@@ -12,6 +14,8 @@ import { useAppTranslation } from "lib/i18n/useAppTranslations";
 const ALL_PET_FOODS = Array.from(FOOD_TO_DIFFICULTY.keys()).sort((a, b) =>
   a.localeCompare(b),
 );
+
+type FoodFilter = "all" | "enabled" | "excluded";
 
 type Props = {
   excludedFoods: CookableName[];
@@ -25,6 +29,21 @@ export const BulkFeedPreferences: React.FC<Props> = ({
   onBack,
 }) => {
   const { t } = useAppTranslation();
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState<FoodFilter>("all");
+
+  const visibleFoods = ALL_PET_FOODS.filter((food) => {
+    const isExcluded = excludedFoods.includes(food);
+
+    if (filter === "enabled" && isExcluded) return false;
+    if (filter === "excluded" && !isExcluded) return false;
+
+    if (search && !food.toLowerCase().includes(search.toLowerCase())) {
+      return false;
+    }
+
+    return true;
+  });
 
   return (
     <div className="flex flex-col gap-1">
@@ -40,31 +59,59 @@ export const BulkFeedPreferences: React.FC<Props> = ({
         </div>
       </div>
       <p className="text-xs px-1">{t("pets.bulkFeedPreferencesDescription")}</p>
-      <div className="grid grid-cols-4 sm:grid-cols-5 gap-1">
-        {ALL_PET_FOODS.map((food) => {
+      <TextInput
+        value={search}
+        onValueChange={setSearch}
+        onCancel={() => setSearch("")}
+        icon={SUNNYSIDE.icons.search}
+        placeholder={t("searchHere")}
+      />
+      <div className="flex flex-row gap-1 w-full">
+        <Button
+          className="flex-1 min-w-0"
+          disabled={filter === "all"}
+          onClick={() => setFilter("all")}
+        >
+          {t("pets.bulkFeedFilterAll")}
+        </Button>
+        <Button
+          className="flex-1 min-w-0"
+          disabled={filter === "enabled"}
+          onClick={() => setFilter("enabled")}
+        >
+          {t("pets.bulkFeedFilterEnabled")}
+        </Button>
+        <Button
+          className="flex-1 min-w-0"
+          disabled={filter === "excluded"}
+          onClick={() => setFilter("excluded")}
+        >
+          {t("pets.bulkFeedFilterExcluded")}
+        </Button>
+      </div>
+      <div className="flex flex-col gap-1 max-h-[300px] overflow-y-auto scrollable pr-1">
+        {visibleFoods.length === 0 && (
+          <p className="text-xs p-1">{t("pets.bulkFeedNoFoodsFound")}</p>
+        )}
+        {visibleFoods.map((food) => {
           const isExcluded = excludedFoods.includes(food);
           const foodImage = ITEM_DETAILS[food]?.image;
 
           return (
             <ButtonPanel
               key={food}
-              className="relative flex items-center justify-center p-1 cursor-pointer"
+              className={classNames(
+                "relative flex items-center gap-2 p-1 cursor-pointer",
+                { "bg-red-background/40": isExcluded },
+              )}
               onClick={() => onToggle(food)}
               selected={!isExcluded}
             >
-              {isExcluded && (
-                <img
-                  src={SUNNYSIDE.icons.cancel}
-                  alt="Excluded"
-                  className="absolute top-0 right-0 w-4 h-4 object-contain z-10"
-                />
-              )}
               <div
-                className="flex items-center justify-center"
+                className="flex items-center justify-center shrink-0"
                 style={{
                   width: `${PIXEL_SCALE * 12}px`,
                   height: `${PIXEL_SCALE * 12}px`,
-                  opacity: isExcluded ? 0.4 : 1,
                 }}
               >
                 {foodImage && (
@@ -76,6 +123,16 @@ export const BulkFeedPreferences: React.FC<Props> = ({
                   />
                 )}
               </div>
+              <span className="text-xs text-brown-800 flex-1 text-left">
+                {food}
+              </span>
+              {isExcluded && (
+                <img
+                  src={SUNNYSIDE.icons.cancel}
+                  alt="Excluded"
+                  className="w-5 h-5 object-contain shrink-0"
+                />
+              )}
             </ButtonPanel>
           );
         })}

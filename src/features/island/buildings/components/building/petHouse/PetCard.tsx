@@ -47,6 +47,7 @@ interface Props {
   setSelectedFeed?: (
     feed: { petId: PetName | number; food: CookableName }[],
   ) => void;
+  bulkFeedExclusions?: CookableName[];
   isBulkFetch?: boolean;
   selectedFetchKeys?: Set<string>;
   fetchPlanAmounts?: Map<string, number>;
@@ -133,6 +134,7 @@ export const PetCard: React.FC<Props> = ({
   isBulkFeed,
   selectedFeed,
   setSelectedFeed,
+  bulkFeedExclusions,
   isBulkFetch,
   selectedFetchKeys,
   fetchPlanAmounts,
@@ -235,6 +237,8 @@ export const PetCard: React.FC<Props> = ({
 
             const alreadyFed = isFoodAlreadyFed(petData, food, now);
 
+            const isExcluded = !!bulkFeedExclusions?.includes(food);
+
             const isSelected =
               isBulkFeed &&
               selectedFeed?.some(
@@ -292,6 +296,7 @@ export const PetCard: React.FC<Props> = ({
                 energy={energy}
                 disabled={isDisabled}
                 locked={isFoodLocked}
+                excluded={isExcluded}
                 selected={isSelected}
                 onClick={handleFoodClick}
               />

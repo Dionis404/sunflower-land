@@ -194,6 +194,11 @@ export const ManagePets: React.FC<Props> = ({ activePets }) => {
       // Create a map to track how much of each food we've allocated
       const foodAllocation: Partial<Record<CookableName, number>> = {};
 
+      // Paw Aura makes feeding free, so food exclusions (which exist to
+      // conserve inventory) don't apply — every pet gets fed.
+      const requiredFeedAmount = getRequiredFeedAmount(state);
+      const isFreeFeeding = requiredFeedAmount === 0;
+
       // First pass: collect all food requests and count available inventory
       const foodRequests: Array<{
         petId: PetName | number;
@@ -208,7 +213,10 @@ export const ManagePets: React.FC<Props> = ({ activePets }) => {
           const requests = getPetFoodRequests(pet, petLevel);
           requests.forEach((food) => {
             const isAlreadyFed = isFoodAlreadyFed(pet, food, now);
-            if (!isAlreadyFed && !bulkFeedExclusions.includes(food)) {
+            if (
+              !isAlreadyFed &&
+              (isFreeFeeding || !bulkFeedExclusions.includes(food))
+            ) {
               foodRequests.push({ petId, food });
               if (!foodAllocation[food]) {
                 foodAllocation[food] = 0;
@@ -219,7 +227,6 @@ export const ManagePets: React.FC<Props> = ({ activePets }) => {
       });
 
       // Second pass: select food items based on available inventory
-      const requiredFeedAmount = getRequiredFeedAmount(state);
       foodRequests.forEach(({ petId, food }) => {
         const availableFood = inventory[food] ?? new Decimal(0);
         const currentAllocation = foodAllocation[food] || 0;
@@ -311,6 +318,8 @@ export const ManagePets: React.FC<Props> = ({ activePets }) => {
     const foodAllocation: Partial<Record<CookableName, number>> = {};
     const foodRequests: Array<{ petId: PetName | number; food: CookableName }> =
       [];
+    const requiredFeedAmount = getRequiredFeedAmount(state);
+    const isFreeFeeding = requiredFeedAmount === 0;
     activePets.forEach(([petId, pet]) => {
       if (pet && !isPetNeglected(pet, now) && !isPetNapping(pet, now)) {
         const { level: petLevel } = getPetLevel(pet.experience);
@@ -318,7 +327,7 @@ export const ManagePets: React.FC<Props> = ({ activePets }) => {
         requests.forEach((food) => {
           if (
             !isFoodAlreadyFed(pet, food, now) &&
-            !bulkFeedExclusions.includes(food)
+            (isFreeFeeding || !bulkFeedExclusions.includes(food))
           ) {
             foodRequests.push({ petId, food });
             if (!foodAllocation[food]) foodAllocation[food] = 0;
@@ -326,7 +335,6 @@ export const ManagePets: React.FC<Props> = ({ activePets }) => {
         });
       }
     });
-    const requiredFeedAmount = getRequiredFeedAmount(state);
     return foodRequests.some(({ food }) => {
       const availableFood = inventory[food] ?? new Decimal(0);
       const currentAllocation = foodAllocation[food] || 0;
@@ -535,6 +543,7 @@ export const ManagePets: React.FC<Props> = ({ activePets }) => {
                 isBulkFeed={isBulkFeed}
                 selectedFeed={selectedFeed}
                 setSelectedFeed={setSelectedFeed}
+                bulkFeedExclusions={bulkFeedExclusions}
                 isBulkFetch={isBulkFetch}
                 selectedFetchKeys={selectedFetchKeys}
                 fetchPlanAmounts={fetchPlanAmounts}

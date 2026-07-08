@@ -20,6 +20,7 @@ export interface FoodButtonPanelProps {
   disabled?: boolean;
   selected?: boolean;
   locked?: boolean;
+  excluded?: boolean;
   className?: string;
 }
 
@@ -33,6 +34,7 @@ export const FoodButtonPanel: React.FC<FoodButtonPanelProps> = ({
   disabled,
   selected,
   locked,
+  excluded,
   className,
 }) => {
   const foodImage = ITEM_DETAILS[food]?.image;
@@ -54,6 +56,7 @@ export const FoodButtonPanel: React.FC<FoodButtonPanelProps> = ({
         className={classNames(
           "flex flex-row p-0 overflow-hidden items-center relative",
           { "cursor-pointer": !!onClick && !disabled },
+          { "bg-red-background/40": excluded && !locked && !foodFed },
           className,
         )}
         onClick={disabled ? undefined : onClick}
@@ -68,7 +71,7 @@ export const FoodButtonPanel: React.FC<FoodButtonPanelProps> = ({
           />
         )}
 
-        {foodFed && (
+        {!locked && foodFed && (
           <img
             src={SUNNYSIDE.icons.confirm}
             alt="Locked"
@@ -76,9 +79,18 @@ export const FoodButtonPanel: React.FC<FoodButtonPanelProps> = ({
           />
         )}
 
+        {!locked && !foodFed && excluded && (
+          <img
+            src={SUNNYSIDE.icons.cancel}
+            alt="Excluded from Bulk Feed"
+            title="Excluded from Bulk Feed"
+            className="absolute top-0 left-0 w-4 h-4 object-contain z-10"
+          />
+        )}
+
         {/* Left: Food image */}
         <div
-          className="flex items-center justify-center"
+          className="flex items-center justify-center relative"
           style={{
             width: `${PIXEL_SCALE * INNER_CANVAS_WIDTH}px`,
             height: `${PIXEL_SCALE * INNER_CANVAS_WIDTH}px`,
