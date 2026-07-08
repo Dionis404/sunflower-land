@@ -7753,6 +7753,8 @@
   "pets.bulkFetch.willFetch": "Will fetch {{amount}}",
   "pets.bulkFetch.short": "{{have}} of {{want}} — not enough energy",
   "pets.bulkFetch.noPets": "No pets are ready to fetch right now.",
+  "pets.bulkFeedPreferences": "Bulk Feed Preferences",
+  "pets.bulkFeedPreferencesDescription": "Select foods to exclude from Bulk Feed. Excluded foods will not be used when feeding all your pets at once.",
   "pets.yourPets": "Your Pets ({{count}})",
   "pets.confirmFeed": "Confirm Feed",
   "pets.feedSelected": "Feed Selected: {{count}}",

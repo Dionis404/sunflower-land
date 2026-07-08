@@ -30,9 +30,12 @@ import { PetInfo } from "./PetInfo";
 import { BulkFetchInputs } from "./BulkFetchInputs";
 import { planBulkFetch, type BulkFetchPlan } from "./planBulkFetch";
 import { hasFeatureAccess } from "lib/flags";
+import { BulkFeedPreferences } from "./BulkFeedPreferences";
 import { isWearableActive } from "features/game/lib/wearables";
 import * as Auth from "features/auth/lib/Provider";
 import type { AuthMachineState } from "features/auth/lib/authMachine";
+import { PIXEL_SCALE } from "features/game/lib/constants";
+import settingsIcon from "assets/icons/settings.png";
 
 const _authToken = (state: AuthMachineState) =>
   state.context.user.rawToken as string;
@@ -75,6 +78,7 @@ export const ManagePets: React.FC<Props> = ({ activePets }) => {
     Partial<Record<PetResourceName, number>>
   >({});
   const [deselectedFetchKeys, setDeselectedFetchKeys] = useState<string[]>([]);
+  const [showBulkFeedPreferences, setShowBulkFeedPreferences] = useState(false);
 
   const inventory = useSelector(
     gameService,
@@ -151,6 +155,16 @@ export const ManagePets: React.FC<Props> = ({ activePets }) => {
     resetBulkFetch();
   };
 
+  const bulkFeedExclusions = state.pets?.bulkFeedExclusions ?? [];
+
+  const handleToggleBulkFeedExclusion = (food: CookableName) => {
+    const exclusions = bulkFeedExclusions.includes(food)
+      ? bulkFeedExclusions.filter((item) => item !== food)
+      : [...bulkFeedExclusions, food];
+
+    gameService.send("pets.bulkFeedExclusionsUpdated", { exclusions });
+  };
+
   const handleConfirmFeed = () => {
     // Event to handle Bulk Feed
     const state = gameService.send("pets.bulkFeed", {
@@ -194,7 +208,7 @@ export const ManagePets: React.FC<Props> = ({ activePets }) => {
           const requests = getPetFoodRequests(pet, petLevel);
           requests.forEach((food) => {
             const isAlreadyFed = isFoodAlreadyFed(pet, food, now);
-            if (!isAlreadyFed) {
+            if (!isAlreadyFed && !bulkFeedExclusions.includes(food)) {
               foodRequests.push({ petId, food });
               if (!foodAllocation[food]) {
                 foodAllocation[food] = 0;
@@ -302,7 +316,10 @@ export const ManagePets: React.FC<Props> = ({ activePets }) => {
         const { level: petLevel } = getPetLevel(pet.experience);
         const requests = getPetFoodRequests(pet, petLevel);
         requests.forEach((food) => {
-          if (!isFoodAlreadyFed(pet, food, now)) {
+          if (
+            !isFoodAlreadyFed(pet, food, now) &&
+            !bulkFeedExclusions.includes(food)
+          ) {
             foodRequests.push({ petId, food });
             if (!foodAllocation[food]) foodAllocation[food] = 0;
           }
@@ -369,6 +386,18 @@ export const ManagePets: React.FC<Props> = ({ activePets }) => {
       authToken,
     });
   };
+  if (showBulkFeedPreferences) {
+    return (
+      <InnerPanel className="flex flex-col mb-1 p-1 gap-1 w-full">
+        <BulkFeedPreferences
+          excludedFoods={bulkFeedExclusions}
+          onToggle={handleToggleBulkFeedExclusion}
+          onBack={() => setShowBulkFeedPreferences(false)}
+        />
+      </InnerPanel>
+    );
+  }
+
   return (
     <>
       <InnerPanel className="flex flex-col justify-between mb-1 p-1 gap-1 w-full">
@@ -392,6 +421,15 @@ export const ManagePets: React.FC<Props> = ({ activePets }) => {
               </Label>
             )}
           </div>
+          {!isBulkFeed && display === "feeding" && (
+            <img
+              src={settingsIcon}
+              alt={t("pets.bulkFeedPreferences")}
+              className="cursor-pointer"
+              style={{ width: `${PIXEL_SCALE * 13}px` }}
+              onClick={() => setShowBulkFeedPreferences(true)}
+            />
+          )}
         </div>
         <div className="flex flex-row gap-1 w-full">
           <Button
