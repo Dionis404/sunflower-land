@@ -53,6 +53,7 @@ export const BulkFeedPreferences: React.FC<Props> = ({
             src={SUNNYSIDE.icons.arrow_left}
             style={{ width: `${PIXEL_SCALE * 11}px` }}
             className="cursor-pointer"
+            alt={t("close")}
             onClick={onBack}
           />
           <Label type="default">{t("pets.bulkFeedPreferences")}</Label>

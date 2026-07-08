@@ -435,7 +435,15 @@ export const ManagePets: React.FC<Props> = ({ activePets }) => {
               alt={t("pets.bulkFeedPreferences")}
               className="cursor-pointer"
               style={{ width: `${PIXEL_SCALE * 13}px` }}
+              role="button"
+              tabIndex={0}
               onClick={() => setShowBulkFeedPreferences(true)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  setShowBulkFeedPreferences(true);
+                }
+              }}
             />
           )}
         </div>
