@@ -10,6 +10,7 @@ import {
 import { getKeys } from "lib/object";
 import { type BumpkinParts, tokenUriBuilder } from "lib/utils/tokenUriBuilder";
 import type { Equipped } from "../types/bumpkin";
+import { SKILL_RANKS, getSkillLevel } from "../types/bumpkinSkills";
 import { isSeed, type SeedName } from "../types/seeds";
 import { makeAnimalBuilding } from "./animals";
 import type { ChoreBoard } from "../types/choreBoard";
@@ -79,9 +80,17 @@ export const INITIAL_STOCK = (
     );
   }
 
-  // increase Axe stock by 50 if player has More Axes skill
-  if (state?.bumpkin?.skills["More Axes"]) {
-    tools.Axe = new Decimal(Math.ceil(tools.Axe.toNumber() + 50));
+  // increase Axe stock if player has the More Axes skill (scales with rank)
+  const moreAxesLevel = state?.bumpkin
+    ? getSkillLevel(state.bumpkin.skills, "More Axes")
+    : 0;
+  if (moreAxesLevel) {
+    tools.Axe = new Decimal(
+      Math.ceil(
+        tools.Axe.toNumber() +
+          SKILL_RANKS["More Axes"].ranks[moreAxesLevel - 1],
+      ),
+    );
   }
 
   if (state?.bumpkin?.skills["More Picks"]) {
@@ -115,6 +124,9 @@ export const INITIAL_STOCK = (
     "Kale Seed": new Decimal(60),
     "Artichoke Seed": new Decimal(60),
     "Barley Seed": new Decimal(60),
+
+    // Chapter Crop Week (limited-time event seed)
+    "Saltwort Seed": new Decimal(30),
 
     "Grape Seed": new Decimal(10),
     "Olive Seed": new Decimal(10),

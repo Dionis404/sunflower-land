@@ -11,10 +11,11 @@ import {
   isCookable,
 } from "features/game/types/consumables";
 import {
-  EXPIRY_COOLDOWNS,
+  getExpiryCooldown,
   getCollectiblesAcrossLocations,
   isTemporaryCollectibleActive,
   isCollectibleBuilt,
+  type TemporaryCollectibleName,
 } from "features/game/lib/collectibleBuilt";
 import { getBudExperienceBoosts } from "features/game/lib/getBudExperienceBoosts";
 import {
@@ -22,6 +23,7 @@ import {
   meetsLevelRequirement,
 } from "features/game/lib/level";
 import { isWearableActive } from "features/game/lib/wearables";
+import { SKILL_RANKS, getSkillLevel } from "features/game/types/bumpkinSkills";
 import type { SellableItem } from "features/game/events/landExpansion/sellCrop";
 import {
   FACTION_ITEMS,
@@ -114,9 +116,11 @@ export const getSellPrice = ({
     multiplier += specialEventMultiplier - 1;
   }
 
-  if (bumpkin.skills["Coin Swindler"] && item.name in CROPS) {
-    multiplier += 0.1;
-    boostUsed.push({ name: "Coin Swindler", value: "+0.1" });
+  const coinSwindlerLevel = getSkillLevel(bumpkin.skills, "Coin Swindler");
+  if (coinSwindlerLevel && item.name in CROPS) {
+    const b = SKILL_RANKS["Coin Swindler"].ranks[coinSwindlerLevel - 1];
+    multiplier += b;
+    boostUsed.push({ name: "Coin Swindler", value: `+${b}` });
   }
 
   return { price: price * multiplier, boostsUsed: boostUsed };
@@ -143,7 +147,7 @@ const applyTempCollectibleBoost = ({
 }: {
   seconds: Decimal;
   cookStartAt: number;
-  collectibleName: keyof typeof EXPIRY_COOLDOWNS;
+  collectibleName: TemporaryCollectibleName;
   game: GameState;
   boostValue: number;
 }) => {
@@ -157,7 +161,7 @@ const applyTempCollectibleBoost = ({
   if (activeItems.length === 0) return seconds;
 
   const newestItem = activeItems.sort((a, b) => b.createdAt! - a.createdAt!)[0];
-  const cooldown = EXPIRY_COOLDOWNS[collectibleName] as number;
+  const cooldown = getExpiryCooldown(collectibleName, game);
   const expiresAt = newestItem.createdAt! + cooldown;
 
   if (expiresAt <= cookStartAt) return seconds;

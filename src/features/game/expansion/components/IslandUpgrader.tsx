@@ -23,6 +23,7 @@ import {
 } from "features/game/events/landExpansion/upgradeFarm";
 import {
   getAscensionLevel,
+  getMaxBumpkinLevel,
   LEVELS_PER_ASCENSION,
 } from "features/game/lib/level";
 import type { CollectibleName } from "features/game/types/craftables";
@@ -142,6 +143,10 @@ const IslandUpgraderModal: React.FC<{
     getAscensionLevel({
       experience: bumpkin.experience ?? 0,
       ascensionLevel: island.ascensionLevel ?? 0,
+      // Mirror the server gate: the pre-ascension cap drops to 150 under
+      // SWAMP_ASCENSION, so without this a maxed level-150 player would be
+      // measured against the legacy 200 cap and never show as ready.
+      maxLevel: getMaxBumpkinLevel(gameState.context.state),
     }).isReadyToAscend;
 
   if (showConfirmation) {

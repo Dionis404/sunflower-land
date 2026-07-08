@@ -92,6 +92,10 @@ import {
 import { detectBot, type DetectBotAction } from "./detectBot";
 import { choseSkill, type ChoseSkillAction } from "./landExpansion/choseSkill";
 import {
+  upgradeSkill,
+  type UpgradeSkillAction,
+} from "./landExpansion/upgradeSkill";
+import {
   resetSkills,
   type ResetSkillsAction,
 } from "./landExpansion/resetSkills";
@@ -748,6 +752,7 @@ import {
   updateBulkFeedExclusions,
   type UpdateBulkFeedExclusionsAction,
 } from "./pets/updateBulkFeedExclusions";
+import { bulkFetchPets, type BulkFetchPetsAction } from "./pets/bulkFetchPets";
 import { type NeglectPetAction, neglectPet } from "./pets/neglectPet";
 import { petPet, type PetPetAction } from "./pets/petPet";
 import { fetchPet, type FetchPetAction } from "./pets/fetchPet";
@@ -876,6 +881,7 @@ export type PlayingEvent =
   | FeedBumpkinAction
   | DetectBotAction
   | ChoseSkillAction
+  | UpgradeSkillAction
   | ResetSkillsAction
   | SeedBoughtAction
   | ClaimAchievementAction
@@ -953,6 +959,7 @@ export type PlayingEvent =
   | FetchPetAction
   | BulkFeedPetsAction
   | UpdateBulkFeedExclusionsAction
+  | BulkFetchPetsAction
   | NeglectPetAction
   | PetPetAction
   | LeaveFactionAction
@@ -1181,6 +1188,7 @@ export const PLAYING_EVENTS: Handlers<PlayingEvent> = {
   "bumpkin.feed": feedBumpkin,
   "trackMilestone.claimed": claimTrackMilestone,
   "skill.chosen": choseSkill,
+  "skill.upgraded": upgradeSkill,
   "skills.reset": resetSkills,
   "seed.bought": seedBought,
   "achievement.claimed": claimAchievement,
@@ -1253,6 +1261,7 @@ export const PLAYING_EVENTS: Handlers<PlayingEvent> = {
   "pet.fetched": fetchPet,
   "pets.bulkFeed": bulkFeedPets,
   "pets.bulkFeedExclusionsUpdated": updateBulkFeedExclusions,
+  "pets.bulkFetch": bulkFetchPets,
   "pet.neglected": neglectPet,
   "desert.digsBought": buyMoreDigs,
   "shipment.restocked": shipmentRestock,

@@ -34,6 +34,7 @@ import {
   type SeedName,
   SEEDS,
 } from "features/game/types/seeds";
+import { CHAPTER_CROP_WEEK_SEED } from "features/game/types/chapterCropWeek";
 import {
   isWithinAOE,
   type Position,
@@ -61,6 +62,7 @@ import {
   trackFarmActivity,
 } from "features/game/types/farmActivity";
 import { isBuffActive } from "features/game/types/buffs";
+import { SKILL_RANKS, getSkillLevel } from "features/game/types/bumpkinSkills";
 import { isAutumnCrop, isSummerCrop } from "./harvest";
 import { getKeys } from "lib/object";
 
@@ -241,12 +243,11 @@ export function getCropTime({
     name: "Time Warp Totem",
     game,
   });
-  // Totems: under SPEED_BOOSTS they're a windowed 2× speed boost for PLOT crops
-  // (see boostWindows; Super & Time Warp merge so they don't stack), so excluded
-  // from the baked time here. Greenhouse crops and the flag-off path keep the
-  // legacy discount-at-start.
-  const totemsWindowed =
-    hasFeatureAccess(game, "SPEED_BOOSTS") && isPlotCrop(crop);
+  // Totems: under SPEED_BOOSTS they're a windowed 2× speed boost (see
+  // boostWindows; Super & Time Warp merge so they don't stack) for BOTH crop
+  // consumers — plot crops and greenhouse crops — so they're excluded from the
+  // baked time here. The flag-off path keeps the legacy discount-at-start.
+  const totemsWindowed = hasFeatureAccess(game, "SPEED_BOOSTS");
   if (!totemsWindowed && (hasSuperTotem || hasTimeWarpTotem)) {
     multiplier = multiplier * 0.5;
     if (hasSuperTotem) boostsUsed.push({ name: "Super Totem", value: "x0.5" });
@@ -255,12 +256,11 @@ export function getCropTime({
   }
 
   // Harvest Hourglass: under SPEED_BOOSTS it's a retroactive speed-rate window
-  // for PLOT crops (see boostWindows), so excluded from the baked time here.
-  // Greenhouse crops aren't on the windowed model yet, so they keep the legacy
-  // discount-at-start (as do all crops when the flag is off). Not recorded in
-  // boostsUsed for the windowed case — contribution is derived over the grow.
-  const harvestHourglassIsWindowed =
-    hasFeatureAccess(game, "SPEED_BOOSTS") && isPlotCrop(crop);
+  // (see boostWindows) for BOTH crop consumers — plot crops and greenhouse
+  // crops — so it's excluded from the baked time here (all crops keep the
+  // legacy discount-at-start when the flag is off). Not recorded in boostsUsed
+  // for the windowed case — contribution is derived over the grow.
+  const harvestHourglassIsWindowed = hasFeatureAccess(game, "SPEED_BOOSTS");
   if (
     !harvestHourglassIsWindowed &&
     isTemporaryCollectibleActive({ name: "Harvest Hourglass", game })
@@ -269,9 +269,11 @@ export function getCropTime({
     boostsUsed.push({ name: "Harvest Hourglass", value: "x0.75" });
   }
 
-  if (skills["Strong Roots"] && isAdvancedCrop(crop)) {
-    multiplier = multiplier * 0.9;
-    boostsUsed.push({ name: "Strong Roots", value: "x0.9" });
+  const strongRootsLevel = getSkillLevel(skills, "Strong Roots");
+  if (strongRootsLevel && isAdvancedCrop(crop)) {
+    const m = SKILL_RANKS["Strong Roots"].ranks[strongRootsLevel - 1];
+    multiplier = multiplier * m;
+    boostsUsed.push({ name: "Strong Roots", value: `x${m}` });
   }
 
   // Apply bud speed boosts
@@ -339,9 +341,11 @@ export const getCropPlotTime = ({
     boostsUsed.push({ name: "Autumn's Embrace", value: "x0.5" });
   }
 
-  if (skills["Green Thumb"]) {
-    seconds = seconds * 0.95;
-    boostsUsed.push({ name: "Green Thumb", value: "x0.95" });
+  const greenThumbLevel = getSkillLevel(skills, "Green Thumb");
+  if (greenThumbLevel) {
+    const m = SKILL_RANKS["Green Thumb"].ranks[greenThumbLevel - 1];
+    seconds = seconds * m;
+    boostsUsed.push({ name: "Green Thumb", value: `x${m}` });
   }
 
   // Under the SPEED_BOOSTS model the Sparrow Shrine is a retroactive speed-rate
@@ -416,9 +420,13 @@ export const getCropPlotTime = ({
     boostsUsed.push({ name: "Broccoli Hat", value: "x0.5" });
   }
 
+  // Rapid Root / Sproutroot Surprise: under SPEED_BOOSTS these are a windowed 2×
+  // speed boost for the crop (see getCropFertiliserWindows); legacy / flag-off
+  // bakes the discount-at-start here. (Sproutroot's +0.2 yield is separate.)
   if (
-    plot?.fertiliser?.name === "Rapid Root" ||
-    plot?.fertiliser?.name === "Sproutroot Surprise"
+    !hasFeatureAccess(game, "SPEED_BOOSTS") &&
+    (plot?.fertiliser?.name === "Rapid Root" ||
+      plot?.fertiliser?.name === "Sproutroot Surprise")
   ) {
     seconds = seconds * 0.5;
   }
@@ -563,12 +571,6 @@ export function getPlantedAt({
   return createdAt - offset;
 }
 
-export function isPlotCrop(
-  plant: GreenHouseCropName | CropName,
-): plant is CropName {
-  return (plant as CropName) in CROPS;
-}
-
 export function plantCropOnPlot({
   plotId,
   cropName,
@@ -698,7 +700,10 @@ export function plant({
       throw new Error("Not a seed");
     }
 
+    // The Chapter Crop Week seed is a limited-time event crop that is not tied
+    // to a season, so it is exempt from the seasonal availability check.
     if (
+      action.item !== CHAPTER_CROP_WEEK_SEED &&
       !SEASONAL_SEEDS[stateCopy.season.season].includes(action.item as SeedName)
     ) {
       throw new Error("This seed is not available in this season");

@@ -44,6 +44,11 @@ import { Panel } from "components/ui/Panel";
 import { ModalOverlay } from "components/ui/ModalOverlay";
 import { useNow } from "lib/utils/hooks/useNow";
 import { hasRequiredIslandExpansion } from "features/game/lib/hasRequiredIslandExpansion";
+import {
+  CHAPTER_CROP_WEEK,
+  CHAPTER_CROP_WEEK_RECIPE,
+} from "features/game/types/chapterCropWeek";
+import { SpecialEventPanel } from "./SpecialEventPanel";
 
 interface Props {
   selected: Cookable;
@@ -91,6 +96,11 @@ export const Recipes: React.FC<Props> = ({
 
   const availableSlots = useVipAccess({ game: state }) ? MAX_COOKING_SLOTS : 1;
   const now = useNow({ live: true });
+
+  // The limited-time Chapter Crop Week recipe (surfaced in its own panel).
+  const eventRecipe = recipes.find(
+    (recipe) => recipe.name === CHAPTER_CROP_WEEK_RECIPE,
+  );
 
   const { boostedExp, boostsUsed } = getFoodExpBoost({
     food: selected,
@@ -282,20 +292,36 @@ export const Recipes: React.FC<Props> = ({
               </Label>
             </div>
             <div className="flex flex-wrap h-fit">
-              {recipes.map((item) => (
-                <Box
-                  isSelected={selected.name === item.name}
-                  key={item.name}
-                  onClick={() => {
-                    setSelected(item);
-                    setShowBoosts(false);
-                    setShowTimeBoosts(false);
-                  }}
-                  image={ITEM_DETAILS[item.name].image}
-                  count={inventory[item.name]}
-                />
-              ))}
+              {recipes
+                .filter((item) => item.name !== CHAPTER_CROP_WEEK_RECIPE)
+                .map((item) => (
+                  <Box
+                    isSelected={selected.name === item.name}
+                    key={item.name}
+                    onClick={() => {
+                      setSelected(item);
+                      setShowBoosts(false);
+                      setShowTimeBoosts(false);
+                    }}
+                    image={ITEM_DETAILS[item.name].image}
+                    count={inventory[item.name]}
+                  />
+                ))}
             </div>
+            {eventRecipe && (
+              <SpecialEventPanel
+                image={ITEM_DETAILS[eventRecipe.name].image}
+                title={t("chapterCropWeek.specialEventRecipe")}
+                endDate={CHAPTER_CROP_WEEK.endDate}
+                isSelected={selected.name === eventRecipe.name}
+                count={inventory[eventRecipe.name]}
+                onSelect={() => {
+                  setSelected(eventRecipe);
+                  setShowBoosts(false);
+                  setShowTimeBoosts(false);
+                }}
+              />
+            )}
           </>
         }
       />

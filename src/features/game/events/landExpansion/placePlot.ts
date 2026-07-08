@@ -4,8 +4,9 @@ import Decimal from "decimal.js-light";
 import { produce } from "immer";
 import type { Coordinates } from "features/game/expansion/components/MapPlacement";
 import {
+  getCropFertiliserWindows,
   getCropPlotBoostWindows,
-  workAccruedAt,
+  pauseWindowedTimer,
 } from "features/game/lib/boostWindows";
 
 export type PlacePlotAction = {
@@ -50,27 +51,19 @@ export function placePlot({
       };
 
       if (updatedPlot.crop && updatedPlot.removedAt) {
-        const crop = updatedPlot.crop;
-
-        if (crop.baseDurationMs !== undefined) {
-          // Windowed crop: "pause" growth across the lift. Bank the work accrued
-          // before removal (already done, so it isn't redone), then resume the
-          // remaining work from now against the current windows. `boostedTime`
-          // keeps the pre-lift progress for the growth bar; `baseDurationMs`
-          // holds the remaining work that still has to accrue.
-          const banked = workAccruedAt({
-            startedAt: crop.plantedAt,
-            at: updatedPlot.removedAt,
-            windows: getCropPlotBoostWindows(game),
-          });
-          crop.baseDurationMs = Math.max(crop.baseDurationMs - banked, 0);
-          crop.boostedTime = (crop.boostedTime ?? 0) + banked;
-          crop.plantedAt = createdAt;
-        } else {
-          // Legacy crop: back-date plantedAt so the lifted interval doesn't count.
-          const existingProgress = updatedPlot.removedAt - crop.plantedAt;
-          crop.plantedAt = createdAt - existingProgress;
-        }
+        // Pause growth across the lift (windowed banking or legacy back-date).
+        // trackProgress banks the pre-lift work into boostedTime for the growth bar.
+        updatedPlot.crop.plantedAt = pauseWindowedTimer({
+          timer: updatedPlot.crop,
+          startedAt: updatedPlot.crop.plantedAt,
+          removedAt: updatedPlot.removedAt,
+          createdAt,
+          windows: [
+            ...getCropPlotBoostWindows(game),
+            ...getCropFertiliserWindows(updatedPlot.fertiliser),
+          ],
+          trackProgress: true,
+        });
       }
       delete updatedPlot.removedAt;
 
