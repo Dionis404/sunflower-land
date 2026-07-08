@@ -56,7 +56,7 @@ export const FoodButtonPanel: React.FC<FoodButtonPanelProps> = ({
         className={classNames(
           "flex flex-row p-0 overflow-hidden items-center relative",
           { "cursor-pointer": !!onClick && !disabled },
-          { "bg-red-background/40": excluded && !locked && !foodFed },
+          { "opacity-50": excluded && !locked && !foodFed },
           className,
         )}
         onClick={disabled ? undefined : onClick}

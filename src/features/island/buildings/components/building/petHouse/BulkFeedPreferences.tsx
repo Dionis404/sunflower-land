@@ -102,7 +102,7 @@ export const BulkFeedPreferences: React.FC<Props> = ({
               key={food}
               className={classNames(
                 "relative flex items-center gap-2 p-1 cursor-pointer",
-                { "bg-red-background/40": isExcluded },
+                { "opacity-50": isExcluded },
               )}
               onClick={() => onToggle(food)}
               selected={!isExcluded}
