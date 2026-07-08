@@ -150,6 +150,8 @@ export type Pets = {
   common?: Partial<Record<PetName, Pet>>;
   nfts?: PetNFTs;
   requestsGeneratedAt?: number;
+  // Foods the player has opted out of using during bulk feed
+  bulkFeedExclusions?: CookableName[];
 };
 
 export type PetConfig = {

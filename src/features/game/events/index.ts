@@ -744,6 +744,10 @@ import {
   type UpgradeTreeAction,
 } from "./landExpansion/upgradeTree";
 import { bulkFeedPets, type BulkFeedPetsAction } from "./pets/bulkFeedPets";
+import {
+  updateBulkFeedExclusions,
+  type UpdateBulkFeedExclusionsAction,
+} from "./pets/updateBulkFeedExclusions";
 import { type NeglectPetAction, neglectPet } from "./pets/neglectPet";
 import { petPet, type PetPetAction } from "./pets/petPet";
 import { fetchPet, type FetchPetAction } from "./pets/fetchPet";
@@ -948,6 +952,7 @@ export type PlayingEvent =
   | WalkPetAction
   | FetchPetAction
   | BulkFeedPetsAction
+  | UpdateBulkFeedExclusionsAction
   | NeglectPetAction
   | PetPetAction
   | LeaveFactionAction
@@ -1247,6 +1252,7 @@ export const PLAYING_EVENTS: Handlers<PlayingEvent> = {
   "pet.walked": walkPet,
   "pet.fetched": fetchPet,
   "pets.bulkFeed": bulkFeedPets,
+  "pets.bulkFeedExclusionsUpdated": updateBulkFeedExclusions,
   "pet.neglected": neglectPet,
   "desert.digsBought": buyMoreDigs,
   "shipment.restocked": shipmentRestock,
