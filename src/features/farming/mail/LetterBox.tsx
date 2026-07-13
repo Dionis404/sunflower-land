@@ -8,6 +8,7 @@ import { Modal } from "components/ui/Modal";
 
 import { PIXEL_SCALE } from "features/game/lib/constants";
 import mailboxImg from "assets/decorations/mailbox.png";
+import { SUNNYSIDE } from "assets/sunnyside";
 import newsIcon from "assets/icons/chapter_icon_2.webp";
 import speakerIcon from "assets/icons/speaker.webp";
 
@@ -25,6 +26,7 @@ import { CommunityFeed } from "./components/CommunityFeed";
 import { AddPostForm } from "./components/AddPostForm";
 import { PostOnXPanel } from "./components/PostOnXPanel";
 import { RoadmapWidget } from "./components/RoadmapWidget";
+import { CheckRewardsPanel } from "./components/CheckRewardsPanel";
 import { useAuth } from "features/auth/lib/Provider";
 import {
   DISCORD_NEWS_STORAGE_EVENT,
@@ -36,7 +38,9 @@ import {
 export const LetterBox: React.FC = () => {
   const { gameService, showAnimations } = useContext(Context);
   const { authState } = useAuth();
-  const [tab, setTab] = useState<"news" | "dailyGift" | "community">("news");
+  const [tab, setTab] = useState<
+    "news" | "dailyGift" | "rewards" | "community"
+  >("news");
   const [isOpen, setIsOpen] = useState(false);
   const [showAddPost, setShowAddPost] = useState(false);
   // Bumped after a post is showcased to remount the feed so the new post loads.
@@ -151,6 +155,11 @@ export const LetterBox: React.FC = () => {
               id: "dailyGift",
             },
             {
+              icon: SUNNYSIDE.decorations.treasure_chest,
+              name: t("mailbox.rewards"),
+              id: "rewards" as const,
+            },
+            {
               icon: speakerIcon,
               name: t("mailbox.community"),
               id: "community" as const,
@@ -168,6 +177,11 @@ export const LetterBox: React.FC = () => {
           {tab === "dailyGift" && (
             <InnerPanel>
               <DailyRewardClaim />
+            </InnerPanel>
+          )}
+          {tab === "rewards" && (
+            <InnerPanel>
+              <CheckRewardsPanel onClose={close} />
             </InnerPanel>
           )}
           {tab === "community" && (

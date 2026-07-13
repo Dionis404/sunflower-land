@@ -39,8 +39,7 @@ import { Traded } from "../components/Traded";
 import { Sniped } from "../components/Sniped";
 import { NewMail } from "./components/NewMail";
 import { Blacklisted } from "../components/Blacklisted";
-import { AirdropPopup } from "./components/Airdrop";
-import { MarketplaceSalesPopup } from "./components/MarketplaceSalesPopup";
+import { RewardsPopup } from "./components/rewards/RewardsPopup";
 import { isBuildingReady, PIXEL_SCALE, TEST_FARM } from "../lib/constants";
 import classNames from "classnames";
 import { Label } from "components/ui/Label";
@@ -296,7 +295,8 @@ const isRefundingAuction = (state: MachineState) =>
 const isPromoing = (state: MachineState) => state.matches("promo");
 const isBlacklisted = (state: MachineState) => state.matches("blacklisted");
 const getBanReason = (state: MachineState) => state.context.banReason;
-const hasAirdrop = (state: MachineState) => state.matches("airdrop");
+const hasClaimableRewards = (state: MachineState) =>
+  state.matches("airdrop") || state.matches("marketplaceSale");
 const isOnChainRaffleAcknowledgment = (state: MachineState) =>
   state.matches("onChainRaffleAcknowledgment");
 const isInvestigating = (state: MachineState) => state.matches("investigating");
@@ -316,8 +316,6 @@ const isEffectSuccess = (state: MachineState) =>
 const isEffectFailed = (state: MachineState) =>
   checkForActiveEffectState(state, "Failed");
 
-const hasMarketplaceSales = (state: MachineState) =>
-  state.matches("marketplaceSale");
 const isTradesCleared = (state: MachineState) => state.matches("tradesCleared");
 const isCompetition = (state: MachineState) => state.matches("competition");
 const isSeasonChanged = (state: MachineState) => state.matches("seasonChanged");
@@ -496,7 +494,7 @@ export const GameWrapper: React.FC<React.PropsWithChildren> = ({
   const promo = useSelector(gameService, isPromoing);
   const blacklisted = useSelector(gameService, isBlacklisted);
   const banReason = useSelector(gameService, getBanReason);
-  const airdrop = useSelector(gameService, hasAirdrop);
+  const claimableRewards = useSelector(gameService, hasClaimableRewards);
   const onChainRaffleAcknowledgment = useSelector(
     gameService,
     isOnChainRaffleAcknowledgment,
@@ -515,7 +513,6 @@ export const GameWrapper: React.FC<React.PropsWithChildren> = ({
   const effectPending = useSelector(gameService, isEffectPending);
   const effectSuccess = useSelector(gameService, isEffectSuccess);
   const effectFailed = useSelector(gameService, isEffectFailed);
-  const showSales = useSelector(gameService, hasMarketplaceSales);
   const competition = useSelector(gameService, isCompetition);
   const seasonChanged = useSelector(gameService, isSeasonChanged);
   const calendarEvent = useSelector(gameService, isCalendarEvent);
@@ -723,9 +720,8 @@ export const GameWrapper: React.FC<React.PropsWithChildren> = ({
             {tradeAlreadyFulfilled && <TradeAlreadyFulfilled />}
             {marketPriceChanged && <PriceChange />}
             {promo && <Promo />}
-            {airdrop && <AirdropPopup />}
+            {claimableRewards && <RewardsPopup />}
             {showOffers && <OffersAcceptedPopup />}
-            {showSales && <MarketplaceSalesPopup />}
             {tradesCleared && <TradesCleared />}
             {vip && <VIPOffer />}
             {starterOffer && <StarterOfferModal />}
