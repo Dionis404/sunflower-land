@@ -40,6 +40,14 @@ export const CheckRewardsPanel: React.FC<Props> = ({ onClose }) => {
     }
   };
 
+  // settle() closes over totalCount, which changes on every render - keep a
+  // ref so the long-lived subscription below always calls the latest
+  // version instead of the one captured when it first subscribed.
+  const settleRef = useRef(settle);
+  useEffect(() => {
+    settleRef.current = settle;
+  });
+
   // Watch the machine directly for the settled state that follows our own
   // REFRESH. Some paths (e.g. ART_MODE) resolve "loading" synchronously
   // within the same send() call, so we can't rely on ever observing a
@@ -48,12 +56,11 @@ export const CheckRewardsPanel: React.FC<Props> = ({ onClose }) => {
   useEffect(() => {
     const subscription = gameService.subscribe((state) => {
       if (checkingRef.current && !state.matches("loading")) {
-        settle(state);
+        settleRef.current(state);
       }
     });
 
     return () => subscription.unsubscribe();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameService]);
 
   useEffect(() => {

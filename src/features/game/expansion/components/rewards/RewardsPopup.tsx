@@ -1,4 +1,4 @@
-import React, { useContext } from "react";
+import React, { useContext, useEffect } from "react";
 
 import { Context } from "features/game/GameProvider";
 import { Button } from "components/ui/Button";
@@ -22,6 +22,16 @@ export const RewardsPopup: React.FC = () => {
     claimAll();
     gameService.send("CLOSE");
   };
+
+  // Someone else (e.g. the mailbox Rewards tab) may have already claimed
+  // everything while the machine was still sitting in "airdrop" /
+  // "marketplaceSale" - without this, the shared modal would be stuck open
+  // with nothing to show and no way to dismiss it.
+  useEffect(() => {
+    if (totalCount === 0) {
+      gameService.send("CLOSE");
+    }
+  }, [totalCount, gameService]);
 
   if (totalCount === 0) {
     return null;
