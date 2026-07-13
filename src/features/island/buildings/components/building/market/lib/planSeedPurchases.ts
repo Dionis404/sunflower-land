@@ -2,7 +2,11 @@ import Decimal from "decimal.js-light";
 
 import type { GameState } from "features/game/types/game";
 import { SEEDS, type SeedName } from "features/game/types/seeds";
-import { getBuyPrice } from "features/game/events/landExpansion/seedBought";
+import {
+  getBuyPrice,
+  isFullMoonBerry,
+} from "features/game/events/landExpansion/seedBought";
+import { isFullMoon } from "features/game/types/calendar";
 import { INVENTORY_LIMIT } from "features/game/lib/constants";
 import { setPrecision } from "lib/utils/formatNumber";
 import {
@@ -46,12 +50,21 @@ export function planSeedPurchases(
   let remainingCoins = state.coins;
   const purchases: SeedPurchase[] = [];
   const seen = new Set<SeedName>();
+  // state doesn't change during the loop, so this only needs computing once
+  // instead of once per candidate seed.
+  const inventoryLimits = INVENTORY_LIMIT(state);
 
   seedNames.forEach((seedName) => {
     if (seen.has(seedName)) return;
     seen.add(seedName);
 
     const seed = SEEDS[seedName];
+
+    // Mirrors seedBought.ts exactly: full moon seeds are only purchasable
+    // during a Full Moon. In practice their stock is 0 outside one anyway,
+    // but asserting this directly avoids relying on that as an implicit
+    // guarantee.
+    if (isFullMoonBerry(seedName) && !isFullMoon(state)) return;
 
     // Mirrors the planting-spot check in seedBought.ts exactly: only skip
     // when the spot is required AND present with less than 1 - a Decimal
@@ -67,7 +80,7 @@ export function planSeedPurchases(
     if (isSeedLocked(seedName, state)) return;
 
     const stock = state.stock[seedName] ?? new Decimal(0);
-    const inventoryLimit = INVENTORY_LIMIT(state)[seedName] ?? new Decimal(0);
+    const inventoryLimit = inventoryLimits[seedName] ?? new Decimal(0);
     const inventoryAmount = setPrecision(
       state.inventory[seedName] ?? new Decimal(0),
       2,

@@ -1,4 +1,4 @@
-import React, { useContext, useState } from "react";
+import React, { useContext, useMemo, useState } from "react";
 import { useSelector } from "@xstate/react";
 import { Box } from "components/ui/Box";
 import { Button } from "components/ui/Button";
@@ -110,6 +110,7 @@ export const SeasonalSeeds: React.FC = () => {
   );
   const [confirmBuyModal, showConfirmBuyModal] = useState(false);
   const [confirmBuyAllModal, showConfirmBuyAllModal] = useState(false);
+  const [buyAllFailures, setBuyAllFailures] = useState<SeedName[]>([]);
 
   const [showBoosts, setShowBoosts] = useState(false);
 
@@ -379,24 +380,33 @@ export const SeasonalSeeds: React.FC = () => {
     ...(isCropWeek ? [CHAPTER_CROP_WEEK_SEED] : []),
   ];
 
-  const buyAllPlan = planSeedPurchases(state, [
-    ...currentSeasonSeeds,
-    ...cropMachineSeeds,
-    ...FULL_MOON_SEEDS,
-  ]);
+  const buyAllPlan = useMemo(
+    () =>
+      planSeedPurchases(state, [
+        ...currentSeasonSeeds,
+        ...cropMachineSeeds,
+        ...FULL_MOON_SEEDS,
+      ]),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [state, currentSeasonSeeds, cropMachineSeeds],
+  );
 
   const buyAllSeeds = () => {
+    const failures: SeedName[] = [];
+
     buyAllPlan.purchases.forEach(({ seedName, amount }) => {
       try {
         gameService.send("seed.bought", { item: seedName, amount });
       } catch (error) {
         // Don't let one seed's edge case (e.g. a race with a state change
         // since the plan was computed) abort the rest of the purchases.
+        failures.push(seedName);
         // eslint-disable-next-line no-console
         console.error(`[BuyAllSeeds] Failed to buy ${seedName}:`, error);
       }
     });
 
+    setBuyAllFailures(failures);
     showConfirmBuyAllModal(false);
   };
 
@@ -474,10 +484,20 @@ export const SeasonalSeeds: React.FC = () => {
             {buyAllPlan.purchases.length > 0 && (
               <Button
                 className="mb-2"
-                onClick={() => showConfirmBuyAllModal(true)}
+                onClick={() => {
+                  setBuyAllFailures([]);
+                  showConfirmBuyAllModal(true);
+                }}
               >
                 {t("seeds.buyAll")}
               </Button>
+            )}
+            {buyAllFailures.length > 0 && (
+              <Label type="danger" className="mb-2">
+                {t("seeds.buyAllPartialFailure", {
+                  seeds: buyAllFailures.join(", "),
+                })}
+              </Label>
             )}
             <ConfirmationModal
               show={confirmBuyAllModal}
