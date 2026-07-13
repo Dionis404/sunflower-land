@@ -54,6 +54,7 @@ import { ConfirmationModal } from "components/ui/ConfirmationModal";
 import { formatNumber, setPrecision } from "lib/utils/formatNumber";
 
 import { Restock } from "./restock/Restock";
+import { planSeedPurchases } from "./lib/planSeedPurchases";
 import type { BoostName, TemperateSeasonName } from "features/game/types/game";
 import { secondsToString } from "lib/utils/time";
 import { secondsTillWeekReset } from "features/game/lib/factions";
@@ -108,6 +109,7 @@ export const SeasonalSeeds: React.FC = () => {
     currentSeasonSeeds[0],
   );
   const [confirmBuyModal, showConfirmBuyModal] = useState(false);
+  const [confirmBuyAllModal, showConfirmBuyAllModal] = useState(false);
 
   const [showBoosts, setShowBoosts] = useState(false);
 
@@ -377,6 +379,27 @@ export const SeasonalSeeds: React.FC = () => {
     ...(isCropWeek ? [CHAPTER_CROP_WEEK_SEED] : []),
   ];
 
+  const buyAllPlan = planSeedPurchases(state, [
+    ...currentSeasonSeeds,
+    ...cropMachineSeeds,
+    ...FULL_MOON_SEEDS,
+  ]);
+
+  const buyAllSeeds = () => {
+    buyAllPlan.purchases.forEach(({ seedName, amount }) => {
+      try {
+        gameService.send("seed.bought", { item: seedName, amount });
+      } catch (error) {
+        // Don't let one seed's edge case (e.g. a race with a state change
+        // since the plan was computed) abort the rest of the purchases.
+        // eslint-disable-next-line no-console
+        console.error(`[BuyAllSeeds] Failed to buy ${seedName}:`, error);
+      }
+    });
+
+    showConfirmBuyAllModal(false);
+  };
+
   const harvestCount = getHarvestCount();
 
   const seasons = getKeys(SEASONAL_SEEDS).filter((season) =>
@@ -448,6 +471,38 @@ export const SeasonalSeeds: React.FC = () => {
                 </Label>
               )}
             </div>
+            {buyAllPlan.purchases.length > 0 && (
+              <Button
+                className="mb-2"
+                onClick={() => showConfirmBuyAllModal(true)}
+              >
+                {t("seeds.buyAll")}
+              </Button>
+            )}
+            <ConfirmationModal
+              show={confirmBuyAllModal}
+              onHide={() => showConfirmBuyAllModal(false)}
+              messages={[
+                t("confirmation.buyAllSeeds", {
+                  seedTypes: buyAllPlan.purchases.length,
+                  coinAmount: formatNumber(buyAllPlan.totalCost),
+                }),
+              ]}
+              bodyContent={
+                <div className="w-full max-h-32 overflow-y-auto scrollable mt-1">
+                  {buyAllPlan.purchases.map(({ seedName, amount }) => (
+                    <p key={seedName} className="text-xs w-full text-left">
+                      {`${amount} x ${seedName}`}
+                    </p>
+                  ))}
+                </div>
+              }
+              onCancel={() => showConfirmBuyAllModal(false)}
+              onConfirm={buyAllSeeds}
+              confirmButtonLabel={t("seeds.buyAll")}
+              bumpkinParts={NPC_WEARABLES.betty}
+              disabled={coins < buyAllPlan.totalCost}
+            />
             <div className="flex flex-wrap mb-2">
               {currentSeasonSeeds.map((name: SeedName) => (
                 <Box
