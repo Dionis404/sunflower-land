@@ -27,7 +27,11 @@ export function updateToolShopSettings({ state, action }: Options): GameState {
     const buyAllEnabled =
       action.buyAllEnabled ?? draft.settings.toolShop?.buyAllEnabled ?? true;
 
-    draft.settings.toolShop = { buyAll, buyAllEnabled };
+    draft.settings.toolShop = {
+      ...draft.settings.toolShop,
+      buyAll,
+      buyAllEnabled,
+    };
 
     getObjectEntries(action.settings).forEach(([toolName, setting]) => {
       if (!setting) return;

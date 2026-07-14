@@ -218,15 +218,19 @@ export const Tools: React.FC = () => {
             {t("craft")} {bulkToolCraftAmount}
           </Button>
         )}
-        {stock.greaterThan(bulkToolCraftAmount) && (
-          <Button
-            disabled={maxAffordableAmount() <= 0}
-            onClick={(e) => craft(e, maxAffordableAmount())}
-          >
-            {t("craft")}{" "}
-            {stock.toDecimalPlaces(0, Decimal.ROUND_DOWN).toNumber()}
-          </Button>
-        )}
+        {stock.greaterThan(bulkToolCraftAmount) &&
+          (() => {
+            const craftAllAmount = maxAffordableAmount();
+
+            return (
+              <Button
+                disabled={craftAllAmount <= 0}
+                onClick={(e) => craft(e, craftAllAmount)}
+              >
+                {t("craft")} {craftAllAmount}
+              </Button>
+            );
+          })()}
       </div>
     );
   };
