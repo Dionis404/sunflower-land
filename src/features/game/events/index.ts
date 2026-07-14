@@ -89,6 +89,10 @@ import {
   feedBumpkin,
   type FeedBumpkinAction,
 } from "./landExpansion/feedBumpkin";
+import {
+  bulkFeedBumpkin,
+  type BulkFeedBumpkinAction,
+} from "./landExpansion/bulkFeedBumpkin";
 import { detectBot, type DetectBotAction } from "./detectBot";
 import { choseSkill, type ChoseSkillAction } from "./landExpansion/choseSkill";
 import {
@@ -875,6 +879,7 @@ export type PlayingEvent =
   | StartSpiceRackAction
   | CollectSpiceRackAction
   | FeedBumpkinAction
+  | BulkFeedBumpkinAction
   | DetectBotAction
   | ChoseSkillAction
   | UpgradeSkillAction
@@ -1181,6 +1186,7 @@ export const PLAYING_EVENTS: Handlers<PlayingEvent> = {
   "spiceRack.started": startSpiceRack,
   "spiceRack.collected": collectSpiceRack,
   "bumpkin.feed": feedBumpkin,
+  "bumpkin.bulkFeed": bulkFeedBumpkin,
   "trackMilestone.claimed": claimTrackMilestone,
   "skill.chosen": choseSkill,
   "skill.upgraded": upgradeSkill,
