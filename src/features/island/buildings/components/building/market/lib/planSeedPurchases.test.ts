@@ -85,6 +85,28 @@ describe("planSeedPurchases", () => {
     expect(plan.purchases).toHaveLength(0);
   });
 
+  // Regression: a farm that has never unlocked a Fruit Patch has no
+  // "Fruit Patch" key in inventory at all (not a 0) - the plan must treat
+  // a missing key the same as zero, not silently include the seed.
+  it("skips a seed whose planting spot is missing from inventory entirely", () => {
+    const state: GameState = {
+      ...GAME_STATE,
+      bumpkin: { ...INITIAL_BUMPKIN, experience: 1_000_000 },
+      inventory: {
+        ...GAME_STATE.inventory,
+        "Fruit Patch": undefined,
+      },
+      stock: {
+        ...GAME_STATE.stock,
+        "Tomato Seed": new Decimal(10),
+      },
+    };
+
+    const plan = planSeedPurchases(state, ["Tomato Seed"]);
+
+    expect(plan.purchases).toHaveLength(0);
+  });
+
   it("skips a seed locked by the bumpkin's level", () => {
     const state: GameState = {
       ...GAME_STATE,

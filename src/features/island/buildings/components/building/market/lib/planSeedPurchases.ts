@@ -66,14 +66,13 @@ export function planSeedPurchases(
     // guarantee.
     if (isFullMoonBerry(seedName) && !isFullMoon(state)) return;
 
-    // Mirrors the planting-spot check in seedBought.ts exactly: only skip
-    // when the spot is required AND present with less than 1 - a Decimal
-    // is always truthy as a JS object, so a plain `!` check here would
-    // wrongly treat an owned-but-zero spot as available.
+    // Mirrors the planting-spot check in seedBought.ts exactly: skip when
+    // the spot is required and either missing from inventory entirely or
+    // present with less than 1.
     const requiredPlantingSpot = seed.plantingSpot;
     if (
       requiredPlantingSpot &&
-      state.inventory[requiredPlantingSpot]?.lessThan(1)
+      (state.inventory[requiredPlantingSpot] ?? new Decimal(0)).lessThan(1)
     ) {
       return;
     }
