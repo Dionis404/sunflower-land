@@ -47,7 +47,7 @@ export const SplitScreenView: React.FC<Props> = ({
   const [panelHeight, setPanelHeight] = useState<number | undefined>(undefined);
 
   useEffect(() => {
-    if (!matchPanelHeight || !headerRef.current) return;
+    if (!matchPanelHeight || !showHeader || !headerRef.current) return;
 
     const node = headerRef.current;
 
@@ -71,7 +71,7 @@ export const SplitScreenView: React.FC<Props> = ({
       observer.disconnect();
       window.removeEventListener("resize", measure);
     };
-  }, [matchPanelHeight]);
+  }, [matchPanelHeight, showHeader]);
 
   return (
     <div
@@ -82,8 +82,8 @@ export const SplitScreenView: React.FC<Props> = ({
     >
       <InnerPanel
         className={classNames("w-full sm:w-3/5 h-fit p-1 flex", {
-          "sm:max-h-96": !tallDesktopContent && !matchPanelHeight,
-          "sm:max-h-[30rem]": tallDesktopContent && !matchPanelHeight,
+          "sm:max-h-96": !tallDesktopContent,
+          "sm:max-h-[30rem]": tallDesktopContent,
           "max-h-80": tallMobileContent,
           "max-h-56": !tallMobileContent,
           "lg:w-3/4": wideModal,
@@ -93,7 +93,7 @@ export const SplitScreenView: React.FC<Props> = ({
           "mt-1 sm:mt-0": !mobileReversePanelOrder,
         })}
         style={
-          matchPanelHeight && panelHeight
+          matchPanelHeight && showHeader && panelHeight
             ? { maxHeight: `${panelHeight}px` }
             : undefined
         }
