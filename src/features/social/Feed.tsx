@@ -729,10 +729,11 @@ const FeedContent: React.FC<FeedContentProps> = ({
           const isFollowing = following.includes(interaction.sender.id);
           const isAtMaxFollowing = !isFollowing && following.length >= 5000;
           const previousInteraction = visibleFeed[index - 1];
+          const currentDateKey = getUTCDateKey(interaction.createdAt);
           const showOlderPostsSeparator =
-            !!previousInteraction &&
-            getUTCDateKey(previousInteraction.createdAt) === todayKey &&
-            getUTCDateKey(interaction.createdAt) !== todayKey;
+            currentDateKey < todayKey &&
+            (index === 0 ||
+              getUTCDateKey(previousInteraction.createdAt) >= todayKey);
 
           return (
             <React.Fragment
