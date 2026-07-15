@@ -20,6 +20,7 @@ import promote from "assets/icons/promote.webp";
 import followIcon from "assets/icons/follow.webp";
 import helpIcon from "assets/icons/help.webp";
 import cheer from "assets/icons/cheer.webp";
+import calendarIcon from "assets/icons/calendar.webp";
 
 import type { MachineState } from "features/game/lib/gameMachine";
 import { Context } from "features/game/GameProvider";
@@ -543,6 +544,38 @@ const HelpIconWithPopover: React.FC<{
   );
 };
 
+const NewDaySeparator: React.FC = () => {
+  const { t } = useAppTranslation();
+
+  return (
+    <div
+      className="relative flex items-center justify-center my-1 py-1 [border-image:var(--button-image)_3_3_4_3_fill]"
+      style={
+        {
+          "--button-image": `url(${SUNNYSIDE.ui.primaryButton})`,
+          borderStyle: "solid",
+          borderWidth: "8px 8px 9px 8px",
+          imageRendering: "pixelated",
+          borderImageRepeat: "stretch",
+          borderRadius: `${PIXEL_SCALE * 5}px`,
+        } as React.CSSProperties
+      }
+    >
+      <img
+        src={calendarIcon}
+        className="absolute top-1/2 -translate-y-1/2"
+        style={{
+          left: "10px",
+          width: "22px",
+          height: "22px",
+          marginTop: "-1px",
+        }}
+      />
+      <span className="text-xs">{t("feed.newDay")}</span>
+    </div>
+  );
+};
+
 const CheerGivenIcon: React.FC = () => {
   return (
     <div
@@ -718,82 +751,89 @@ const FeedContent: React.FC<FeedContentProps> = ({
               : () => onInteractionClick(interaction);
           const isFollowing = following.includes(interaction.sender.id);
           const isAtMaxFollowing = !isFollowing && following.length >= 5000;
+          const previousInteraction = visibleFeed[index - 1];
+          const showNewDaySeparator =
+            !!previousInteraction &&
+            getUTCDateKey(interaction.createdAt) !==
+              getUTCDateKey(previousInteraction.createdAt);
 
           return (
-            <div
-              key={`${interaction.createdAt}-${index}`}
-              className={classNames({
-                "pl-1": direction === "left" && interaction.type === "chat",
-                "pr-1": direction === "right" && interaction.type === "chat",
-              })}
-            >
-              <InteractionBubble
-                key={`${interaction.sender.id}-${interaction.createdAt}-${index}`}
-                direction={direction}
-                type={interaction.type}
-                onClick={onClick}
+            <React.Fragment key={`${interaction.createdAt}-${index}`}>
+              {showNewDaySeparator && <NewDaySeparator />}
+              <div
+                className={classNames({
+                  "pl-1": direction === "left" && interaction.type === "chat",
+                  "pr-1": direction === "right" && interaction.type === "chat",
+                })}
               >
-                <div className="text-xxs flex">
-                  <div className="-ml-1 mr-1">
-                    {interaction.sender.clothing ? (
-                      <NPCIcon
-                        parts={interaction.sender.clothing}
-                        width={PIXEL_SCALE * 14}
-                      />
-                    ) : (
-                      <img
-                        id="silhouette"
-                        src={silhouette}
-                        className="w-3/5 absolute top-1.5 left-1.5"
-                      />
-                    )}
-                  </div>
-                  <div className="flex flex-col w-full gap-1">
-                    <span className="flex items-center gap-1">
-                      {interaction.type === "announcement" ? (
-                        <img src={promote} />
+                <InteractionBubble
+                  key={`${interaction.sender.id}-${interaction.createdAt}-${index}`}
+                  direction={direction}
+                  type={interaction.type}
+                  onClick={onClick}
+                >
+                  <div className="text-xxs flex">
+                    <div className="-ml-1 mr-1">
+                      {interaction.sender.clothing ? (
+                        <NPCIcon
+                          parts={interaction.sender.clothing}
+                          width={PIXEL_SCALE * 14}
+                        />
                       ) : (
-                        `${sender ?? ""} ${interaction.sender ? "- " : ""}`
-                      )}
-                      <RelativeTime createdAt={interaction.createdAt} />
-                    </span>
-                    <div className="flex justify-between items-center w-full">
-                      <div
-                        className="text-xs break-words w-full"
-                        style={{
-                          lineHeight: 1,
-                        }}
-                      >
-                        {interaction.message}
-                      </div>
-                      {!!interaction.helpedThemToday && (
-                        <HelpIconWithPopover
-                          helpedThemToday={interaction.helpedThemToday}
+                        <img
+                          id="silhouette"
+                          src={silhouette}
+                          className="w-3/5 absolute top-1.5 left-1.5"
                         />
                       )}
-                      {!!interaction.cheeredThemToday && <CheerGivenIcon />}
                     </div>
-                  </div>
-                  {!isAtMaxFollowing && (
-                    <div className="flex items-center justify-end flex-grow cursor-pointer">
-                      {interaction.type === "follow" && !isFollowing && (
-                        <Button
-                          className="text-xs flex h-10 w-10 justify-center items-center"
-                          onClick={(e) =>
-                            handleFollowClick(e, interaction.sender.id)
-                          }
+                    <div className="flex flex-col w-full gap-1">
+                      <span className="flex items-center gap-1">
+                        {interaction.type === "announcement" ? (
+                          <img src={promote} />
+                        ) : (
+                          `${sender ?? ""} ${interaction.sender ? "- " : ""}`
+                        )}
+                        <RelativeTime createdAt={interaction.createdAt} />
+                      </span>
+                      <div className="flex justify-between items-center w-full">
+                        <div
+                          className="text-xs break-words w-full"
+                          style={{
+                            lineHeight: 1,
+                          }}
                         >
-                          <img
-                            src={followIcon}
-                            className="w-6 object-contain"
+                          {interaction.message}
+                        </div>
+                        {!!interaction.helpedThemToday && (
+                          <HelpIconWithPopover
+                            helpedThemToday={interaction.helpedThemToday}
                           />
-                        </Button>
-                      )}
+                        )}
+                        {!!interaction.cheeredThemToday && <CheerGivenIcon />}
+                      </div>
                     </div>
-                  )}
-                </div>
-              </InteractionBubble>
-            </div>
+                    {!isAtMaxFollowing && (
+                      <div className="flex items-center justify-end flex-grow cursor-pointer">
+                        {interaction.type === "follow" && !isFollowing && (
+                          <Button
+                            className="text-xs flex h-10 w-10 justify-center items-center"
+                            onClick={(e) =>
+                              handleFollowClick(e, interaction.sender.id)
+                            }
+                          >
+                            <img
+                              src={followIcon}
+                              className="w-6 object-contain"
+                            />
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </InteractionBubble>
+              </div>
+            </React.Fragment>
           );
         })}
       </div>
