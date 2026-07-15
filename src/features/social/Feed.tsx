@@ -20,7 +20,6 @@ import promote from "assets/icons/promote.webp";
 import followIcon from "assets/icons/follow.webp";
 import helpIcon from "assets/icons/help.webp";
 import cheer from "assets/icons/cheer.webp";
-import calendarIcon from "assets/icons/calendar.webp";
 
 import type { MachineState } from "features/game/lib/gameMachine";
 import { Context } from "features/game/GameProvider";
@@ -544,36 +543,13 @@ const HelpIconWithPopover: React.FC<{
   );
 };
 
-const NewDaySeparator: React.FC = () => {
+const OlderPostsSeparator: React.FC = () => {
   const { t } = useAppTranslation();
 
   return (
-    <div
-      className="relative flex items-center justify-center my-1 py-1 [border-image:var(--button-image)_3_3_4_3_fill]"
-      style={
-        {
-          "--button-image": `url(${SUNNYSIDE.ui.primaryButton})`,
-          borderStyle: "solid",
-          borderWidth: "8px 8px 9px 8px",
-          imageRendering: "pixelated",
-          borderImageRepeat: "stretch",
-          borderRadius: `${PIXEL_SCALE * 5}px`,
-        } as React.CSSProperties
-      }
-    >
-      <img
-        src={calendarIcon}
-        alt=""
-        className="absolute top-1/2 -translate-y-1/2"
-        style={{
-          left: "10px",
-          width: "22px",
-          height: "22px",
-          marginTop: "-1px",
-        }}
-      />
-      <span className="text-xs">{t("feed.newDay")}</span>
-    </div>
+    <p className="text-xs text-center opacity-70 my-1">
+      {t("feed.olderPosts")}
+    </p>
   );
 };
 
@@ -753,16 +729,16 @@ const FeedContent: React.FC<FeedContentProps> = ({
           const isFollowing = following.includes(interaction.sender.id);
           const isAtMaxFollowing = !isFollowing && following.length >= 5000;
           const previousInteraction = visibleFeed[index - 1];
-          const showNewDaySeparator =
+          const showOlderPostsSeparator =
             !!previousInteraction &&
-            getUTCDateKey(interaction.createdAt) !==
-              getUTCDateKey(previousInteraction.createdAt);
+            getUTCDateKey(previousInteraction.createdAt) === todayKey &&
+            getUTCDateKey(interaction.createdAt) !== todayKey;
 
           return (
             <React.Fragment
               key={`${interaction.sender.id}-${interaction.createdAt}`}
             >
-              {showNewDaySeparator && <NewDaySeparator />}
+              {showOlderPostsSeparator && <OlderPostsSeparator />}
               <div
                 className={classNames({
                   "pl-1": direction === "left" && interaction.type === "chat",
