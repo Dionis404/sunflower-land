@@ -563,6 +563,7 @@ const NewDaySeparator: React.FC = () => {
     >
       <img
         src={calendarIcon}
+        alt=""
         className="absolute top-1/2 -translate-y-1/2"
         style={{
           left: "10px",
@@ -758,7 +759,9 @@ const FeedContent: React.FC<FeedContentProps> = ({
               getUTCDateKey(previousInteraction.createdAt);
 
           return (
-            <React.Fragment key={`${interaction.createdAt}-${index}`}>
+            <React.Fragment
+              key={`${interaction.sender.id}-${interaction.createdAt}`}
+            >
               {showNewDaySeparator && <NewDaySeparator />}
               <div
                 className={classNames({
@@ -767,7 +770,6 @@ const FeedContent: React.FC<FeedContentProps> = ({
                 })}
               >
                 <InteractionBubble
-                  key={`${interaction.sender.id}-${interaction.createdAt}-${index}`}
                   direction={direction}
                   type={interaction.type}
                   onClick={onClick}
