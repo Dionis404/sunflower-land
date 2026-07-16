@@ -41,7 +41,10 @@ import {
 import { ConfirmationModal } from "components/ui/ConfirmationModal";
 import { formatNumber } from "lib/utils/formatNumber";
 import { NPC_WEARABLES } from "lib/npcs";
-import { planToolPurchases } from "../lib/planToolPurchases";
+import {
+  computeAffordableAmount,
+  planToolPurchases,
+} from "../lib/planToolPurchases";
 import { ToolBuyAllSettingsModal } from "./ToolBuyAllSettingsModal";
 
 const isLoveAnimalTool = (
@@ -117,28 +120,15 @@ export const Tools: React.FC = () => {
   const { t } = useAppTranslation();
 
   const maxAffordableAmount = () => {
-    let amount = stock.toDecimalPlaces(0, Decimal.ROUND_DOWN).toNumber();
+    if (isLoveAnimalTool(selectedName)) return 0;
 
-    if (amount <= 0) return 0;
-
-    if (price > 0) {
-      amount = Math.min(amount, Math.floor(state.coins / price));
-    }
-
-    getObjectEntries(selectedIngredients).forEach(
-      ([name, ingredientAmount]) => {
-        if (!ingredientAmount) return;
-
-        const affordableByIngredient = (inventory[name] ?? new Decimal(0))
-          .div(ingredientAmount)
-          .toDecimalPlaces(0, Decimal.ROUND_DOWN)
-          .toNumber();
-
-        amount = Math.min(amount, affordableByIngredient);
-      },
+    return computeAffordableAmount(
+      stock.toDecimalPlaces(0, Decimal.ROUND_DOWN).toNumber(),
+      price,
+      state.coins,
+      selectedIngredients,
+      (name) => inventory[name] ?? new Decimal(0),
     );
-
-    return Math.max(amount, 0);
   };
 
   const hasRequiredLevel = (tool: Tool) => {
@@ -262,7 +252,16 @@ export const Tools: React.FC = () => {
 
     buyAllPlan.purchases.forEach(({ toolName, amount }) => {
       try {
-        gameService.send("tool.crafted", { tool: toolName, amount });
+        const result = gameService.send("tool.crafted", {
+          tool: toolName,
+          amount,
+        });
+
+        if (result.context.state.farmActivity?.["Axe Crafted"] === 1) {
+          gameAnalytics.trackMilestone({
+            event: "Tutorial:AxeCrafted:Completed",
+          });
+        }
       } catch (error) {
         // Don't let one tool's edge case (e.g. a race with a state change
         // since the plan was computed) abort the rest of the purchases.

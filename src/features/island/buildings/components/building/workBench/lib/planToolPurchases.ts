@@ -26,6 +26,43 @@ export type ToolPurchasePlan = {
   totalIngredients: Partial<Record<InventoryItemName, Decimal>>;
 };
 
+/**
+ * Given a stock/inventory-derived starting amount, works out how many of
+ * that amount are actually affordable against a coin pool and a set of
+ * ingredient costs. Shared by the single-tool "craft all" calculation and
+ * the "buy all" planner below so the two stay in sync.
+ */
+export function computeAffordableAmount(
+  initialAmount: number,
+  price: number,
+  coins: number,
+  ingredients: Partial<Record<InventoryItemName, Decimal>>,
+  getAvailableIngredient: (name: InventoryItemName) => Decimal,
+): number {
+  let amount = initialAmount;
+
+  if (amount <= 0) return 0;
+
+  if (price > 0) {
+    amount = Math.min(amount, Math.floor(coins / price));
+  }
+
+  getObjectEntries(ingredients).forEach(
+    ([ingredientName, ingredientAmount]) => {
+      if (!ingredientAmount) return;
+
+      const affordableByIngredient = getAvailableIngredient(ingredientName)
+        .div(ingredientAmount)
+        .toDecimalPlaces(0, Decimal.ROUND_DOWN)
+        .toNumber();
+
+      amount = Math.min(amount, affordableByIngredient);
+    },
+  );
+
+  return Math.max(amount, 0);
+}
+
 function isToolLocked(toolName: WorkbenchToolName, state: GameState) {
   const tool = WORKBENCH_TOOLS[toolName];
 
@@ -92,25 +129,14 @@ export function planToolPurchases(
     if (amount <= 0) return;
 
     const price = getToolPrice(tool, 1, state);
-
-    if (price > 0) {
-      const affordableByCoins = Math.floor(remainingCoins / price);
-      amount = Math.min(amount, affordableByCoins);
-    }
-
     const ingredients = tool.ingredients(state.bumpkin.skills);
 
-    getObjectEntries(ingredients).forEach(
-      ([ingredientName, ingredientAmount]) => {
-        if (!ingredientAmount) return;
-
-        const affordableByIngredient = getRemainingIngredient(ingredientName)
-          .div(ingredientAmount)
-          .toDecimalPlaces(0, Decimal.ROUND_DOWN)
-          .toNumber();
-
-        amount = Math.min(amount, affordableByIngredient);
-      },
+    amount = computeAffordableAmount(
+      amount,
+      price,
+      remainingCoins,
+      ingredients,
+      getRemainingIngredient,
     );
 
     if (amount <= 0) return;
