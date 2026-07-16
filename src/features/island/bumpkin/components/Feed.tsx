@@ -94,6 +94,7 @@ export const Feed: React.FC<Props> = ({
   const [categoryToFeed, setCategoryToFeed] = useState<{
     category: FoodCategory;
     items: Consumable[];
+    isDrink: boolean;
   } | null>(null);
   const { gameService } = useContext(Context);
   const now = useNow({ live: true });
@@ -273,7 +274,13 @@ export const Feed: React.FC<Props> = ({
                     <button
                       type="button"
                       className="text-xs underline cursor-pointer ml-2"
-                      onClick={() => setCategoryToFeed({ category, items })}
+                      onClick={() =>
+                        setCategoryToFeed({
+                          category,
+                          items,
+                          isDrink: categoryIsDrink,
+                        })
+                      }
                     >
                       {categoryIsDrink
                         ? t("drinkAllCategory")
@@ -348,9 +355,7 @@ export const Feed: React.FC<Props> = ({
           setCategoryToFeed(null);
         }}
         confirmButtonLabel={
-          categoryToFeed?.items.every((item) => isJuice(item.name))
-            ? t("drinkAllCategory")
-            : t("eatAllCategory")
+          categoryToFeed?.isDrink ? t("drinkAllCategory") : t("eatAllCategory")
         }
         bumpkinParts={bumpkin.equipped as Equipped}
       />
