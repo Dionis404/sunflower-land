@@ -96,7 +96,10 @@ export const Tools: React.FC = () => {
       amount,
     });
 
-    if (state.context.state.farmActivity?.["Axe Crafted"] === 1) {
+    if (
+      selectedName === "Axe" &&
+      state.context.state.farmActivity?.["Axe Crafted"] === amount
+    ) {
       gameAnalytics.trackMilestone({
         event: "Tutorial:AxeCrafted:Completed",
       });
@@ -257,7 +260,10 @@ export const Tools: React.FC = () => {
           amount,
         });
 
-        if (result.context.state.farmActivity?.["Axe Crafted"] === 1) {
+        if (
+          toolName === "Axe" &&
+          result.context.state.farmActivity?.["Axe Crafted"] === amount
+        ) {
           gameAnalytics.trackMilestone({
             event: "Tutorial:AxeCrafted:Completed",
           });
