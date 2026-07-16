@@ -7,6 +7,10 @@ import {
   isFullMoonBerry,
 } from "features/game/events/landExpansion/seedBought";
 import { isFullMoon } from "features/game/types/calendar";
+import {
+  CHAPTER_CROP_WEEK_SEED,
+  isChapterCropWeekActive,
+} from "features/game/types/chapterCropWeek";
 import { INVENTORY_LIMIT } from "features/game/lib/constants";
 import { setPrecision } from "lib/utils/formatNumber";
 import {
@@ -65,6 +69,15 @@ export function planSeedPurchases(
     // but asserting this directly avoids relying on that as an implicit
     // guarantee.
     if (isFullMoonBerry(seedName) && !isFullMoon(state)) return;
+
+    // Mirrors seedBought.ts exactly: the Chapter Crop Week event seed is
+    // only purchasable while the event is active.
+    if (
+      seedName === CHAPTER_CROP_WEEK_SEED &&
+      !isChapterCropWeekActive(Date.now())
+    ) {
+      return;
+    }
 
     // Mirrors the planting-spot check in seedBought.ts exactly: skip when
     // the spot is required and either missing from inventory entirely or

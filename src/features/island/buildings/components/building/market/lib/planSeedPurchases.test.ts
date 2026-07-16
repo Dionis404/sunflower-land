@@ -2,6 +2,10 @@ import Decimal from "decimal.js-light";
 
 import { INITIAL_BUMPKIN, TEST_FARM } from "features/game/lib/constants";
 import type { GameState } from "features/game/types/game";
+import {
+  CHAPTER_CROP_WEEK,
+  CHAPTER_CROP_WEEK_SEED,
+} from "features/game/types/chapterCropWeek";
 
 import { planSeedPurchases } from "./planSeedPurchases";
 
@@ -188,5 +192,44 @@ describe("planSeedPurchases", () => {
 
     expect(plan.purchases).toHaveLength(1);
     expect(plan.purchases[0].seedName).toBe("Celestine Seed");
+  });
+
+  it("skips the Chapter Crop Week seed outside of the event window", () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(CHAPTER_CROP_WEEK.startDate.getTime() - 1);
+
+    const state: GameState = {
+      ...GAME_STATE,
+      stock: {
+        ...GAME_STATE.stock,
+        [CHAPTER_CROP_WEEK_SEED]: new Decimal(5),
+      },
+    };
+
+    const plan = planSeedPurchases(state, [CHAPTER_CROP_WEEK_SEED]);
+
+    expect(plan.purchases).toHaveLength(0);
+
+    jest.useRealTimers();
+  });
+
+  it("includes the Chapter Crop Week seed during the event window", () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(CHAPTER_CROP_WEEK.startDate.getTime());
+
+    const state: GameState = {
+      ...GAME_STATE,
+      stock: {
+        ...GAME_STATE.stock,
+        [CHAPTER_CROP_WEEK_SEED]: new Decimal(5),
+      },
+    };
+
+    const plan = planSeedPurchases(state, [CHAPTER_CROP_WEEK_SEED]);
+
+    expect(plan.purchases).toHaveLength(1);
+    expect(plan.purchases[0].seedName).toBe(CHAPTER_CROP_WEEK_SEED);
+
+    jest.useRealTimers();
   });
 });

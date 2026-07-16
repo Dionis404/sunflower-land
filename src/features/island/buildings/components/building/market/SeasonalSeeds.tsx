@@ -386,9 +386,10 @@ export const SeasonalSeeds: React.FC = () => {
         ...currentSeasonSeeds,
         ...cropMachineSeeds,
         ...FULL_MOON_SEEDS,
+        ...(isCropWeek ? [CHAPTER_CROP_WEEK_SEED] : []),
       ]),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [state, currentSeasonSeeds, cropMachineSeeds],
+    [state, currentSeasonSeeds, cropMachineSeeds, isCropWeek],
   );
 
   const buyAllSeeds = () => {
