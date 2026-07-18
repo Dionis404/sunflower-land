@@ -22,10 +22,12 @@ import {
 } from "features/game/types/animals";
 import { Label } from "components/ui/Label";
 import { getIngredients } from "./feedMixed";
+import { getFeedShortfall } from "./getNeededFeedAmount";
 
 interface Props {
   show: boolean;
   onClose: () => void;
+  building: "Hen House" | "Barn";
 }
 
 const FOOD_TYPE_TERMS = {
@@ -33,7 +35,11 @@ const FOOD_TYPE_TERMS = {
   medicine: "feeder.foodTypes.medicine",
 } as const;
 
-export const FeederMachineModal: React.FC<Props> = ({ show, onClose }) => {
+export const FeederMachineModal: React.FC<Props> = ({
+  show,
+  onClose,
+  building,
+}) => {
   const { t } = useAppTranslation();
   const { gameService, shortcutItem } = useContext(Context);
   const [
@@ -47,6 +53,13 @@ export const FeederMachineModal: React.FC<Props> = ({ show, onClose }) => {
   const { coins } = ANIMAL_FOODS[selectedName];
 
   const { ingredients } = getIngredients({ state, name: selectedName });
+
+  const neededToMix = getFeedShortfall({
+    game: state,
+    building,
+    item: selectedName,
+  });
+  const hasNeededToMix = neededToMix.gt(0);
 
   const groupedItems = getKeys(ANIMAL_FOODS).reduce(
     (acc, item) => {
@@ -121,6 +134,17 @@ export const FeederMachineModal: React.FC<Props> = ({ show, onClose }) => {
                   >
                     {t("mix.ten")}
                   </Button>
+                  {hasNeededToMix && (
+                    <Button
+                      disabled={
+                        lessFunds(neededToMix.toNumber()) ||
+                        lessIngredients(neededToMix.toNumber())
+                      }
+                      onClick={() => mix(neededToMix.toNumber())}
+                    >
+                      {t("mix.needed", { amount: neededToMix.toNumber() })}
+                    </Button>
+                  )}
                 </div>
               }
             />
