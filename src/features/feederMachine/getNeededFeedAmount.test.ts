@@ -5,13 +5,15 @@ import { getFeedShortfall, getNeededFeedAmount } from "./getNeededFeedAmount";
 
 describe("getNeededFeedAmount", () => {
   const animal = ({
+    id,
     state,
     type,
   }: {
+    id: string;
     state: Animal["state"];
     type: Animal["type"];
   }): Animal => ({
-    id: "0",
+    id,
     type,
     createdAt: 0,
     state,
@@ -29,8 +31,8 @@ describe("getNeededFeedAmount", () => {
         henHouse: {
           ...INITIAL_FARM.henHouse,
           animals: {
-            "0": animal({ state: "idle", type: "Chicken" }),
-            "1": animal({ state: "sad", type: "Chicken" }),
+            "0": animal({ id: "0", state: "idle", type: "Chicken" }),
+            "1": animal({ id: "1", state: "sad", type: "Chicken" }),
           },
         },
       },
@@ -48,7 +50,7 @@ describe("getNeededFeedAmount", () => {
         barn: {
           ...INITIAL_FARM.barn,
           animals: {
-            "0": animal({ state: "idle", type: "Cow" }),
+            "0": animal({ id: "0", state: "idle", type: "Cow" }),
           },
         },
       },
@@ -68,7 +70,7 @@ describe("getNeededFeedAmount", () => {
         henHouse: {
           ...INITIAL_FARM.henHouse,
           animals: {
-            "0": animal({ state: "idle", type: "Chicken" }),
+            "0": animal({ id: "0", state: "idle", type: "Chicken" }),
           },
         },
       },
@@ -86,8 +88,8 @@ describe("getNeededFeedAmount", () => {
         barn: {
           ...INITIAL_FARM.barn,
           animals: {
-            "0": animal({ state: "idle", type: "Cow" }),
-            "1": animal({ state: "idle", type: "Sheep" }),
+            "0": animal({ id: "0", state: "idle", type: "Cow" }),
+            "1": animal({ id: "1", state: "idle", type: "Sheep" }),
           },
         },
       },
@@ -110,8 +112,8 @@ describe("getNeededFeedAmount", () => {
         barn: {
           ...INITIAL_FARM.barn,
           animals: {
-            "0": animal({ state: "idle", type: "Cow" }),
-            "1": animal({ state: "idle", type: "Sheep" }),
+            "0": animal({ id: "0", state: "idle", type: "Cow" }),
+            "1": animal({ id: "1", state: "idle", type: "Sheep" }),
           },
         },
       },
@@ -134,8 +136,8 @@ describe("getNeededFeedAmount", () => {
         barn: {
           ...INITIAL_FARM.barn,
           animals: {
-            "0": animal({ state: "idle", type: "Cow" }),
-            "1": animal({ state: "idle", type: "Sheep" }),
+            "0": animal({ id: "0", state: "idle", type: "Cow" }),
+            "1": animal({ id: "1", state: "idle", type: "Sheep" }),
           },
         },
       },
@@ -153,8 +155,8 @@ describe("getNeededFeedAmount", () => {
         barn: {
           ...INITIAL_FARM.barn,
           animals: {
-            "0": animal({ state: "sick", type: "Cow" }),
-            "1": animal({ state: "idle", type: "Cow" }),
+            "0": animal({ id: "0", state: "sick", type: "Cow" }),
+            "1": animal({ id: "1", state: "idle", type: "Cow" }),
           },
         },
       },
@@ -172,9 +174,9 @@ describe("getNeededFeedAmount", () => {
         henHouse: {
           ...INITIAL_FARM.henHouse,
           animals: {
-            "0": animal({ state: "ready", type: "Chicken" }),
+            "0": animal({ id: "0", state: "ready", type: "Chicken" }),
             "1": {
-              ...animal({ state: "idle", type: "Chicken" }),
+              ...animal({ id: "1", state: "idle", type: "Chicken" }),
               awakeAt: Date.now() + 60 * 60 * 1000,
             },
           },
@@ -190,13 +192,15 @@ describe("getNeededFeedAmount", () => {
 
 describe("getFeedShortfall", () => {
   const animal = ({
+    id,
     state,
     type,
   }: {
+    id: string;
     state: Animal["state"];
     type: Animal["type"];
   }): Animal => ({
-    id: "0",
+    id,
     type,
     createdAt: 0,
     state,
@@ -217,8 +221,8 @@ describe("getFeedShortfall", () => {
         henHouse: {
           ...INITIAL_FARM.henHouse,
           animals: {
-            "0": animal({ state: "idle", type: "Chicken" }),
-            "1": animal({ state: "sad", type: "Chicken" }),
+            "0": animal({ id: "0", state: "idle", type: "Chicken" }),
+            "1": animal({ id: "1", state: "sad", type: "Chicken" }),
           },
         },
       },
@@ -239,8 +243,8 @@ describe("getFeedShortfall", () => {
         henHouse: {
           ...INITIAL_FARM.henHouse,
           animals: {
-            "0": animal({ state: "idle", type: "Chicken" }),
-            "1": animal({ state: "sad", type: "Chicken" }),
+            "0": animal({ id: "0", state: "idle", type: "Chicken" }),
+            "1": animal({ id: "1", state: "sad", type: "Chicken" }),
           },
         },
       },
@@ -261,8 +265,8 @@ describe("getFeedShortfall", () => {
         henHouse: {
           ...INITIAL_FARM.henHouse,
           animals: {
-            "0": animal({ state: "idle", type: "Chicken" }),
-            "1": animal({ state: "sad", type: "Chicken" }),
+            "0": animal({ id: "0", state: "idle", type: "Chicken" }),
+            "1": animal({ id: "1", state: "sad", type: "Chicken" }),
           },
         },
       },
