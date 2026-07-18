@@ -9,7 +9,6 @@ import React, {
   useContext,
   useEffect,
   useLayoutEffect,
-  useMemo,
   useRef,
   useState,
 } from "react";
@@ -112,26 +111,6 @@ const mergeUpdates = (
     },
     ...current.slice(1),
   ];
-};
-
-const getUTCDateKey = (timestamp: number) =>
-  new Date(timestamp).toISOString().split("T")[0];
-
-const getNextUTCDateKeyRefreshAt = (timestamp: number) => {
-  const date = new Date(timestamp);
-
-  return (
-    Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate() + 1) +
-    1000
-  );
-};
-
-const shouldShowInteraction = (interaction: Interaction, todayKey: string) => {
-  if (interaction.type !== "cheer") {
-    return true;
-  }
-
-  return getUTCDateKey(interaction.createdAt) === todayKey;
 };
 
 export type FeedFilter = "all" | "help" | "chat" | "cheer" | "follow";
@@ -601,15 +580,6 @@ const FeedContent: React.FC<FeedContentProps> = ({
   const { t } = useAppTranslation();
   const [canPaginate, setCanPaginate] = useState(false);
   const [hasMeasuredScroll, setHasMeasuredScroll] = useState(false);
-  const [todayKey, setTodayKey] = useState(() => getUTCDateKey(Date.now()));
-  const refreshTimeoutRef = useRef<number | null>(null);
-  const visibleFeed = useMemo(
-    () =>
-      feed.filter((interaction) =>
-        shouldShowInteraction(interaction, todayKey),
-      ),
-    [feed, todayKey],
-  );
 
   // Intersection observer to load more interactions when the loader is in view
   const { ref: intersectionRef, inView } = useInView({
@@ -624,27 +594,7 @@ const FeedContent: React.FC<FeedContentProps> = ({
     // tiny buffer so off-by-1 doesn’t trigger
     setCanPaginate(el.scrollHeight > el.clientHeight + 2);
     setHasMeasuredScroll(true);
-  }, [visibleFeed.length, filter]);
-
-  useEffect(() => {
-    const refreshTodayKey = () => {
-      const now = Date.now();
-      const refreshIn = getNextUTCDateKeyRefreshAt(now) - now;
-
-      refreshTimeoutRef.current = window.setTimeout(() => {
-        setTodayKey(getUTCDateKey(Date.now()));
-        refreshTodayKey();
-      }, refreshIn);
-    };
-
-    refreshTodayKey();
-
-    return () => {
-      if (refreshTimeoutRef.current) {
-        window.clearTimeout(refreshTimeoutRef.current);
-      }
-    };
-  }, []);
+  }, [feed.length, filter]);
 
   useEffect(() => {
     if (scrollContainerRef.current) {
@@ -658,9 +608,7 @@ const FeedContent: React.FC<FeedContentProps> = ({
     const shouldLoadMore =
       hasMore &&
       !isLoadingMore &&
-      (inView ||
-        visibleFeed.length === 0 ||
-        (hasMeasuredScroll && !canPaginate));
+      (inView || feed.length === 0 || (hasMeasuredScroll && !canPaginate));
 
     if (shouldLoadMore) {
       loadMore();
@@ -672,7 +620,7 @@ const FeedContent: React.FC<FeedContentProps> = ({
     inView,
     isLoadingMore,
     loadMore,
-    visibleFeed.length,
+    feed.length,
   ]);
 
   const setRefs = useCallback(
@@ -697,7 +645,7 @@ const FeedContent: React.FC<FeedContentProps> = ({
     return <FeedSkeleton />;
   }
 
-  if (visibleFeed.length === 0) {
+  if (feed.length === 0) {
     return (
       <div className="flex justify-center items-center h-full">
         {hasMore ? (
@@ -715,7 +663,7 @@ const FeedContent: React.FC<FeedContentProps> = ({
       className="scrollable overflow-hidden overflow-y-auto"
     >
       <div className="flex flex-col gap-1 pr-1">
-        {visibleFeed.map((interaction, index) => {
+        {feed.map((interaction, index) => {
           const direction =
             interaction?.sender.username === username ? "right" : "left";
           const sender =
