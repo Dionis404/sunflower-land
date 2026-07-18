@@ -12,11 +12,13 @@ import { Context } from "features/game/GameProvider";
 import { useSelector } from "@xstate/react";
 import type { MachineState } from "features/game/lib/gameMachine";
 
+const EMPTY_FARMS: number[] = [];
+
 const _cheeredFarmsToday = (state: MachineState) => {
   const game = state.context.visitorState ?? state.context.state;
   const today = new Date().toISOString().split("T")[0];
 
-  if (game.socialFarming.cheersGiven.date !== today) return [];
+  if (game.socialFarming.cheersGiven.date !== today) return EMPTY_FARMS;
 
   return game.socialFarming.cheersGiven.farms;
 };
