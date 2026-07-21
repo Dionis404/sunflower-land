@@ -9440,5 +9440,14 @@
   "bounties.sell.animal.stateChanged": "Bu hayvanın sağlığı değişti. Lütfen güncellenmiş ödülü inceleyin ve tekrar onaylayın.",
   "marketplace.economy.petalParadise": "Petal Paradise -% 55 kaynak vergisi",
   "marketplace.economy.desertIsland": "Çöl Adası -% 25 kaynak vergisi",
-  "temporaryBoosts": "Geçici Güçlendirmeler"
+  "temporaryBoosts": "Geçici Güçlendirmeler",
+  "home.upgrade.widget": "3 Ağustos'ta eviniz yenilenecek.",
+  "home.upgrade.readMore": "Devamını oku.",
+  "home.upgrade.title": "Eviniz yenileniyor",
+  "home.upgrade.date": "3 Ağustos",
+  "home.upgrade.description": "3 Ağustos'ta eviniz, büyüdükçe dekore edebileceğiniz ve yükseltebileceğiniz yeni bir özelleştirilebilir oda ile değiştiriliyor. Eski eviniz emekli olacak, bu yüzden eşyalarınızı yeni odaya taşımanız gerekecek.",
+  "home.upgrade.tooling": "Endişelenmeyin, tek bir tıklamayla sizin için her şeyi taşıyacak otomatik araçlar var.",
+  "home.upgrade.revert": "Bugün yükseltebilir ve 3 Ağustos'tan önce istediğiniz zaman Ayarlar > Gelişmiş > Deneyler bölümünden fikrinizi değiştirebilirsiniz.",
+  "home.upgrade.later": "Belki daha sonra",
+  "home.upgrade.now": "Şimdi yükselt"
 }

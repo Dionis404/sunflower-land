@@ -9440,5 +9440,14 @@
   "bounties.sell.animal.stateChanged": "この動物の健康状態は変わりました。更新されたバウンティを確認して、もう一度確認してください。",
   "marketplace.economy.petalParadise": "ペタルパラダイス-55% 資源税",
   "marketplace.economy.desertIsland": "デザートアイランド-25% 資源税",
-  "temporaryBoosts": "テンポラリー・ブースト"
+  "temporaryBoosts": "テンポラリー・ブースト",
+  "home.upgrade.widget": "8月3日、あなたの家はアップグレードされます。",
+  "home.upgrade.readMore": "もっと読む。",
+  "home.upgrade.title": "あなたの家はアップグレード中です",
+  "home.upgrade.date": "8 月 3 日",
+  "home.upgrade.description": "8月3日、ご自宅はカスタマイズ可能な新しい部屋に置き換えられ、成長に合わせて装飾したりアップグレードしたりできます。古い家は廃止されるので、アイテムを新しい部屋に移動する必要があります。",
+  "home.upgrade.tooling": "心配はいりません。ワンクリックですべてを移動してくれる自動ツールがあります。",
+  "home.upgrade.revert": "「設定」>「アドバンス」>「テスト」から今すぐアップグレードして、8月3日より前にいつでも変更することができます。",
+  "home.upgrade.later": "たぶん後で",
+  "home.upgrade.now": "今すぐアップグレード"
 }

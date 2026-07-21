@@ -9440,5 +9440,14 @@
   "bounties.sell.animal.stateChanged": "Die Gesundheit dieses Tieres hat sich verändert. Bitte überprüfe die aktualisierte Prämie und bestätige sie erneut.",
   "marketplace.economy.petalParadise": "Petal Paradise — 55% Ressourcensteuer",
   "marketplace.economy.desertIsland": "Desert Island — 25% Ressourcensteuer",
-  "temporaryBoosts": "Temporäre Boosts"
+  "temporaryBoosts": "Temporäre Boosts",
+  "home.upgrade.widget": "Am 3. August wird Ihr Zuhause modernisiert.",
+  "home.upgrade.readMore": "Lesen Sie mehr.",
+  "home.upgrade.title": "Ihr Zuhause wird modernisiert",
+  "home.upgrade.date": "3. August",
+  "home.upgrade.description": "Am 3. August wird dein Zuhause durch einen neuen anpassbaren Raum ersetzt, den du dekorieren und aufwerten kannst, wenn du wächst. Ihr altes Zuhause wird in den Ruhestand gehen, sodass Sie Ihre Gegenstände in das neue Zimmer bringen müssen.",
+  "home.upgrade.tooling": "Keine Sorge, es gibt automatisierte Tools, die alles mit einem einzigen Klick für Sie übernehmen.",
+  "home.upgrade.revert": "Du kannst heute ein Upgrade durchführen und deine Meinung jederzeit vor dem 3. August unter Einstellungen > Erweitert > Experimente ändern.",
+  "home.upgrade.later": "Vielleicht später",
+  "home.upgrade.now": "Jetzt upgraden"
 }

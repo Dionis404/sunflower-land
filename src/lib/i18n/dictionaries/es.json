@@ -9440,5 +9440,14 @@
   "bounties.sell.animal.stateChanged": "La salud de este animal cambió. Revisa la recompensa actualizada y vuelve a confirmarla.",
   "marketplace.economy.petalParadise": "Petal Paradise: impuesto sobre los recursos del 55%",
   "marketplace.economy.desertIsland": "Isla Desierta: impuesto sobre los recursos del 25%",
-  "temporaryBoosts": "Impulsos temporales"
+  "temporaryBoosts": "Impulsos temporales",
+  "home.upgrade.widget": "El 3 de agosto, se actualizará su hogar.",
+  "home.upgrade.readMore": "Lea más.",
+  "home.upgrade.title": "Su casa está siendo mejorada",
+  "home.upgrade.date": "3 de agosto",
+  "home.upgrade.description": "El 3 de agosto, su hogar será reemplazado por una nueva habitación personalizable que puede decorar y mejorar a medida que crezca. Su antigua casa se retirará, por lo que tendrá que trasladar sus artículos a la nueva habitación.",
+  "home.upgrade.tooling": "No se preocupe, hay herramientas automatizadas que lo transferirán todo con un solo clic.",
+  "home.upgrade.revert": "Puedes actualizarte hoy mismo y cambiar de opinión en cualquier momento antes del 3 de agosto desde Configuración > Avanzado > Experimentos.",
+  "home.upgrade.later": "Quizá más tarde",
+  "home.upgrade.now": "Actualiza ahora"
 }

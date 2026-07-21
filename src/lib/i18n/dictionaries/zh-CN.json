@@ -9440,5 +9440,14 @@
   "bounties.sell.animal.stateChanged": "这只动物的健康状况发生了变化。请查看更新的赏金并再次确认。",
   "marketplace.economy.petalParadise": "花瓣天堂-55% 的资源税",
   "marketplace.economy.desertIsland": "荒岛-25% 的资源税",
-  "temporaryBoosts": "临时提升"
+  "temporaryBoosts": "临时提升",
+  "home.upgrade.widget": "8月3日，您的房屋将进行升级。",
+  "home.upgrade.readMore": "阅读更多。",
+  "home.upgrade.title": "您的房屋正在升级中",
+  "home.upgrade.date": "8 月 3 日",
+  "home.upgrade.description": "8月3日，您的房屋将被新的可定制房间所取代，您可以随着成长进行装饰和升级。您的旧房将退休，因此您需要将物品搬到新房间。",
+  "home.upgrade.tooling": "别担心，有自动化工具可以让你一键移动所有内容。",
+  "home.upgrade.revert": "你可以立即升级，并在 8 月 3 日之前随时从 “设置” > “高级” > “实验” 中改变主意。",
+  "home.upgrade.later": "也许以后再说",
+  "home.upgrade.now": "立即升级"
 }

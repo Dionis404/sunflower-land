@@ -9440,5 +9440,14 @@
   "bounties.sell.animal.stateChanged": "L'état de santé de cet animal a changé. Veuillez consulter la prime mise à jour et confirmer à nouveau.",
   "marketplace.economy.petalParadise": "Petal Paradise - Taxe sur les ressources de 55 %",
   "marketplace.economy.desertIsland": "Desert Island - taxe sur les ressources de 25 %",
-  "temporaryBoosts": "Boosts temporaires"
+  "temporaryBoosts": "Boosts temporaires",
+  "home.upgrade.widget": "Le 3 août, votre maison sera rénovée.",
+  "home.upgrade.readMore": "En savoir plus",
+  "home.upgrade.title": "Votre maison est en cours de rénovation",
+  "home.upgrade.date": "Le 3 août",
+  "home.upgrade.description": "Le 3 août, votre maison sera remplacée par une nouvelle pièce personnalisable que vous pourrez décorer et améliorer au fur et à mesure de votre croissance. Votre ancienne maison sera retirée, vous devrez donc déplacer vos objets dans la nouvelle pièce.",
+  "home.upgrade.tooling": "Ne vous inquiétez pas, il existe des outils automatisés qui vous permettront de tout déplacer en un seul clic.",
+  "home.upgrade.revert": "Vous pouvez effectuer une mise à niveau dès aujourd'hui et changer d'avis à tout moment avant le 3 août dans Réglages > Avancés > Expériences.",
+  "home.upgrade.later": "Peut-être plus tard",
+  "home.upgrade.now": "Mettez à jour dès maintenant"
 }

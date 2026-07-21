@@ -9440,5 +9440,14 @@
   "bounties.sell.animal.stateChanged": "La salute di questo animale è cambiata. Controlla la ricompensa aggiornata e conferma nuovamente.",
   "marketplace.economy.petalParadise": "Petal Paradise - imposta sulle risorse del 55%",
   "marketplace.economy.desertIsland": "Desert Island - imposta sulle risorse del 25%",
-  "temporaryBoosts": "Potenziamenti temporanei"
+  "temporaryBoosts": "Potenziamenti temporanei",
+  "home.upgrade.widget": "Il 3 agosto, la tua casa verrà ristrutturata.",
+  "home.upgrade.readMore": "Leggi di più",
+  "home.upgrade.title": "La tua casa è in fase di ristrutturazione",
+  "home.upgrade.date": "3 agosto",
+  "home.upgrade.description": "Il 3 agosto, la tua casa verrà sostituita con una nuova stanza personalizzabile che potrai decorare e aggiornare man mano che cresci. La tua vecchia casa verrà ritirata, quindi dovrai spostare i tuoi oggetti nella nuova stanza.",
+  "home.upgrade.tooling": "Non preoccuparti, ci sono strumenti automatici che sposteranno tutto per te con un solo clic.",
+  "home.upgrade.revert": "Puoi effettuare l'upgrade oggi e cambiare idea in qualsiasi momento prima del 3 agosto da Impostazioni > Avanzate > Esperimenti.",
+  "home.upgrade.later": "Forse più tardi",
+  "home.upgrade.now": "Aggiorna ora"
 }

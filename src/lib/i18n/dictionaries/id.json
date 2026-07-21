@@ -9440,5 +9440,14 @@
   "bounties.sell.animal.stateChanged": "Kesehatan hewan ini berubah. Silakan tinjau hadiah yang diperbarui dan konfirmasikan lagi.",
   "marketplace.economy.petalParadise": "Petal Paradise - pajak sumber daya 55%",
   "marketplace.economy.desertIsland": "Pulau Gurun - pajak sumber daya 25%",
-  "temporaryBoosts": "Peningkatan Sementara"
+  "temporaryBoosts": "Peningkatan Sementara",
+  "home.upgrade.widget": "Pada tanggal 3 Agustus, rumah Anda akan ditingkatkan.",
+  "home.upgrade.readMore": "Baca lebih lanjut.",
+  "home.upgrade.title": "Rumah Anda sedang ditingkatkan",
+  "home.upgrade.date": "3 Agustus",
+  "home.upgrade.description": "Pada tanggal 3 Agustus, rumah Anda diganti dengan ruangan baru yang dapat disesuaikan yang dapat Anda hias dan tingkatkan saat Anda tumbuh. Rumah lama Anda akan pensiun, jadi Anda harus memindahkan barang-barang Anda ke ruangan baru.",
+  "home.upgrade.tooling": "Jangan khawatir, ada alat otomatis yang akan memindahkan semuanya untuk Anda dalam satu klik.",
+  "home.upgrade.revert": "Anda dapat meningkatkan hari ini dan berubah pikiran kapan saja sebelum 3 Agustus dari Pengaturan> Lanjutan> Eksperimen.",
+  "home.upgrade.later": "Mungkin nanti",
+  "home.upgrade.now": "Tingkatkan sekarang"
 }
