@@ -113,6 +113,9 @@ const mergeUpdates = (
   ];
 };
 
+const getUTCDateKey = (timestamp: number) =>
+  new Date(timestamp).toISOString().split("T")[0];
+
 export type FeedFilter = "all" | "help" | "chat" | "cheer" | "follow";
 export type FeedFilterOption = {
   value: FeedFilter;
@@ -580,6 +583,8 @@ const FeedContent: React.FC<FeedContentProps> = ({
   const { t } = useAppTranslation();
   const [canPaginate, setCanPaginate] = useState(false);
   const [hasMeasuredScroll, setHasMeasuredScroll] = useState(false);
+  const now = useNow({ live: true });
+  const todayKey = getUTCDateKey(now);
 
   // Intersection observer to load more interactions when the loader is in view
   const { ref: intersectionRef, inView } = useInView({
@@ -676,7 +681,7 @@ const FeedContent: React.FC<FeedContentProps> = ({
               : () => onInteractionClick(interaction);
           const isFollowing = following.includes(interaction.sender.id);
           const isAtMaxFollowing = !isFollowing && following.length >= 5000;
-          const previousInteraction = visibleFeed[index - 1];
+          const previousInteraction = feed[index - 1];
           const currentDateKey = getUTCDateKey(interaction.createdAt);
           const showOlderPostsSeparator =
             currentDateKey < todayKey &&
