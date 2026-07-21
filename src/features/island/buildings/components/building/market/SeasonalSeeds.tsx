@@ -53,6 +53,7 @@ import { NPC_WEARABLES } from "lib/npcs";
 import { ConfirmationModal } from "components/ui/ConfirmationModal";
 import { formatNumber, setPrecision } from "lib/utils/formatNumber";
 import { useVipAccess } from "lib/utils/hooks/useVipAccess";
+import { VIPAccess } from "features/game/components/VipAccess";
 import { ModalContext } from "features/game/components/modal/ModalProvider";
 import vipIcon from "assets/icons/vip.webp";
 
@@ -577,10 +578,6 @@ export const SeasonalSeeds: React.FC = () => {
               <Button
                 className="relative"
                 onClick={() => {
-                  if (!isVIP) {
-                    openModal("BUY_BANNER");
-                    return;
-                  }
                   setBuyAllFailures([]);
                   showConfirmBuyAllModal(true);
                 }}
@@ -611,12 +608,24 @@ export const SeasonalSeeds: React.FC = () => {
               }),
             ]}
             bodyContent={
-              <div className="w-full max-h-32 overflow-y-auto scrollable mt-1">
-                {buyAllPlan.purchases.map(({ seedName, amount }) => (
-                  <p key={seedName} className="text-xs w-full text-left">
-                    {`${amount} x ${seedName}`}
-                  </p>
-                ))}
+              <div className="w-full flex flex-col items-center">
+                <div className="w-full max-h-32 overflow-y-auto scrollable mt-1">
+                  {buyAllPlan.purchases.map(({ seedName, amount }) => (
+                    <p key={seedName} className="text-xs w-full text-left">
+                      {`${amount} x ${seedName}`}
+                    </p>
+                  ))}
+                </div>
+                <div className="w-full flex justify-around mt-2 -mb-4">
+                  <div className="w-[95%]" />
+                  <VIPAccess
+                    isVIP={isVIP}
+                    onUpgrade={() => {
+                      showConfirmBuyAllModal(false);
+                      openModal("BUY_BANNER");
+                    }}
+                  />
+                </div>
               </div>
             }
             onCancel={() => showConfirmBuyAllModal(false)}
