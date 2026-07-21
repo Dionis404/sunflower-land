@@ -30,6 +30,10 @@ import { PetInfo } from "./PetInfo";
 import { BulkFetchInputs } from "./BulkFetchInputs";
 import { planBulkFetch, type BulkFetchPlan } from "./planBulkFetch";
 import { BulkFeedPreferences } from "./BulkFeedPreferences";
+import {
+  getBulkFeedExclusions,
+  setBulkFeedExclusions,
+} from "./bulkFeedExclusions";
 import { isWearableActive } from "features/game/lib/wearables";
 import * as Auth from "features/auth/lib/Provider";
 import type { AuthMachineState } from "features/auth/lib/authMachine";
@@ -78,6 +82,9 @@ export const ManagePets: React.FC<Props> = ({ activePets }) => {
   >({});
   const [deselectedFetchKeys, setDeselectedFetchKeys] = useState<string[]>([]);
   const [showBulkFeedPreferences, setShowBulkFeedPreferences] = useState(false);
+  const [bulkFeedExclusions, setBulkFeedExclusionsState] = useState<
+    CookableName[]
+  >(() => getBulkFeedExclusions());
 
   const inventory = useSelector(
     gameService,
@@ -153,14 +160,13 @@ export const ManagePets: React.FC<Props> = ({ activePets }) => {
     resetBulkFetch();
   };
 
-  const bulkFeedExclusions = state.pets?.bulkFeedExclusions ?? [];
-
   const handleToggleBulkFeedExclusion = (food: CookableName) => {
     const exclusions = bulkFeedExclusions.includes(food)
       ? bulkFeedExclusions.filter((item) => item !== food)
       : [...bulkFeedExclusions, food];
 
-    gameService.send("pets.bulkFeedExclusionsUpdated", { exclusions });
+    setBulkFeedExclusionsState(exclusions);
+    setBulkFeedExclusions(exclusions);
   };
 
   const handleConfirmFeed = () => {
