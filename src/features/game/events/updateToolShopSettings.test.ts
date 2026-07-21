@@ -9,13 +9,12 @@ describe("updateToolShopSettings", () => {
       state: TEST_FARM,
       action: {
         type: "toolShop.settingsUpdated",
-        settings: { Axe: { blocked: true, maxInInventory: 5 } },
+        settings: { Axe: { blocked: true } },
       },
     });
 
     expect(state.settings.toolShop?.buyAll?.Axe).toEqual({
       blocked: true,
-      maxInInventory: 5,
     });
   });
 
@@ -32,13 +31,12 @@ describe("updateToolShopSettings", () => {
       state: initial,
       action: {
         type: "toolShop.settingsUpdated",
-        settings: { Axe: { maxInInventory: 10 } },
+        settings: { Axe: { blocked: false } },
       },
     });
 
     expect(state.settings.toolShop?.buyAll?.Axe).toEqual({
-      blocked: true,
-      maxInInventory: 10,
+      blocked: false,
     });
   });
 

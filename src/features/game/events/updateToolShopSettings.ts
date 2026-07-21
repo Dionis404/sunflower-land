@@ -6,7 +6,6 @@ import { getObjectEntries } from "lib/object";
 
 export type ToolShopBuyAllSetting = {
   blocked?: boolean;
-  maxInInventory?: number;
 };
 
 export type UpdateToolShopSettingsAction = {

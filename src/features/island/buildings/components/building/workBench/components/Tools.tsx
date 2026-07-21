@@ -27,7 +27,6 @@ import { useAppTranslation } from "lib/i18n/useAppTranslations";
 import { hasRequiredIslandExpansion } from "features/game/lib/hasRequiredIslandExpansion";
 
 import { SUNNYSIDE } from "assets/sunnyside";
-import settingsIcon from "assets/icons/settings.png";
 import { Label } from "components/ui/Label";
 import type { IslandType, LoveAnimalItem } from "features/game/types/game";
 import { getIslandName } from "features/game/types/game";
@@ -38,14 +37,11 @@ import {
   getAscensionLevel,
   meetsLevelRequirement,
 } from "features/game/lib/level";
-import { ConfirmationModal } from "components/ui/ConfirmationModal";
-import { formatNumber } from "lib/utils/formatNumber";
-import { NPC_WEARABLES } from "lib/npcs";
 import {
   computeAffordableAmount,
   planToolPurchases,
 } from "../lib/planToolPurchases";
-import { ToolBuyAllSettingsModal } from "./ToolBuyAllSettingsModal";
+import { ToolBatchBuyModal } from "./ToolBatchBuyModal";
 
 const isLoveAnimalTool = (
   toolName: WorkbenchToolName | LoveAnimalItem,
@@ -57,9 +53,7 @@ export const Tools: React.FC = () => {
   const [selectedName, setSelectedName] = useState<
     WorkbenchToolName | LoveAnimalItem
   >("Axe");
-  const [confirmBuyAllModal, showConfirmBuyAllModal] = useState(false);
-  const [showBuyAllSettings, setShowBuyAllSettings] = useState(false);
-  const [buyAllFailures, setBuyAllFailures] = useState<WorkbenchToolName[]>([]);
+  const [showBatchBuy, setShowBatchBuy] = useState(false);
   const { gameService, shortcutItem } = useContext(Context);
 
   const state = useSelector(gameService, (state) => state.context.state);
@@ -250,37 +244,6 @@ export const Tools: React.FC = () => {
     [state],
   );
 
-  const buyAllTools = () => {
-    const failures: WorkbenchToolName[] = [];
-
-    buyAllPlan.purchases.forEach(({ toolName, amount }) => {
-      try {
-        const result = gameService.send("tool.crafted", {
-          tool: toolName,
-          amount,
-        });
-
-        if (
-          toolName === "Axe" &&
-          result.context.state.farmActivity?.["Axe Crafted"] === amount
-        ) {
-          gameAnalytics.trackMilestone({
-            event: "Tutorial:AxeCrafted:Completed",
-          });
-        }
-      } catch (error) {
-        // Don't let one tool's edge case (e.g. a race with a state change
-        // since the plan was computed) abort the rest of the purchases.
-        failures.push(toolName);
-        // eslint-disable-next-line no-console
-        console.error(`[BuyAllTools] Failed to buy ${toolName}:`, error);
-      }
-    });
-
-    setBuyAllFailures(failures);
-    showConfirmBuyAllModal(false);
-  };
-
   return (
     <SplitScreenView
       panel={
@@ -300,86 +263,6 @@ export const Tools: React.FC = () => {
       }
       content={
         <div className="flex flex-col w-full relative">
-          <button
-            type="button"
-            onClick={() => setShowBuyAllSettings(true)}
-            aria-label={t("tools.buyAllSettings")}
-            className="absolute top-3 right-1 cursor-pointer hover:brightness-95"
-          >
-            <img src={settingsIcon} className="h-10" />
-          </button>
-          {buyAllEnabled && (
-            <div className="pr-12 mt-2 mb-2">
-              <Button
-                disabled={buyAllPlan.purchases.length === 0}
-                onClick={() => {
-                  setBuyAllFailures([]);
-                  showConfirmBuyAllModal(true);
-                }}
-              >
-                {t("tools.buyAll")}
-              </Button>
-            </div>
-          )}
-          <ToolBuyAllSettingsModal
-            show={showBuyAllSettings}
-            onClose={() => setShowBuyAllSettings(false)}
-            tools={[...LAND_TOOLS, ...WATER_TOOLS]}
-            settings={state.settings.toolShop?.buyAll ?? {}}
-            buyAllEnabled={buyAllEnabled}
-          />
-          {buyAllFailures.length > 0 && (
-            <Label type="danger" className="mb-2">
-              {t("tools.buyAllPartialFailure", {
-                tools: buyAllFailures.join(", "),
-              })}
-            </Label>
-          )}
-          <ConfirmationModal
-            show={confirmBuyAllModal}
-            onHide={() => showConfirmBuyAllModal(false)}
-            messages={[
-              t("confirmation.buyAllTools", {
-                toolTypes: buyAllPlan.purchases.length,
-                coinAmount: formatNumber(buyAllPlan.totalCost),
-              }),
-            ]}
-            bodyContent={
-              <div className="w-full max-h-64 overflow-y-auto scrollable mt-1">
-                {getObjectEntries(buyAllPlan.totalIngredients).length > 0 && (
-                  <div className="flex flex-wrap gap-2 mb-2">
-                    {getObjectEntries(buyAllPlan.totalIngredients).map(
-                      ([ingredientName, ingredientAmount]) => (
-                        <div key={ingredientName} className="flex items-center">
-                          <img
-                            src={ITEM_DETAILS[ingredientName].image}
-                            className="h-6 mr-1"
-                          />
-                          <span className="text-xs">
-                            {formatNumber(ingredientAmount ?? new Decimal(0))}
-                          </span>
-                        </div>
-                      ),
-                    )}
-                  </div>
-                )}
-                <div className="flex flex-wrap">
-                  {buyAllPlan.purchases.map(({ toolName, amount }) => (
-                    <Box
-                      key={toolName}
-                      count={new Decimal(amount)}
-                      image={ITEM_DETAILS[toolName].image}
-                    />
-                  ))}
-                </div>
-              </div>
-            }
-            onCancel={() => showConfirmBuyAllModal(false)}
-            onConfirm={buyAllTools}
-            confirmButtonLabel={t("tools.buyAll")}
-            bumpkinParts={NPC_WEARABLES.blacksmith}
-            disabled={state.coins < buyAllPlan.totalCost}
-          />
           <Label type="default" className="mb-1.5">
             {t("landTools")}
           </Label>
@@ -447,6 +330,24 @@ export const Tools: React.FC = () => {
               );
             })}
           </div>
+          {buyAllEnabled && (
+            <div className="mt-2 mb-2">
+              <Button
+                disabled={LAND_TOOLS.length === 0 && WATER_TOOLS.length === 0}
+                onClick={() => setShowBatchBuy(true)}
+              >
+                {t("tools.batchBuy")}
+              </Button>
+            </div>
+          )}
+          <ToolBatchBuyModal
+            show={showBatchBuy}
+            onClose={() => setShowBatchBuy(false)}
+            tools={[...LAND_TOOLS, ...WATER_TOOLS]}
+            settings={state.settings.toolShop?.buyAll ?? {}}
+            plan={buyAllPlan}
+            coins={state.coins}
+          />
         </div>
       }
     />

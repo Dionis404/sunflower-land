@@ -2180,7 +2180,6 @@ export interface GameState {
           WorkbenchToolName,
           {
             blocked?: boolean;
-            maxInInventory?: number;
           }
         >
       >;

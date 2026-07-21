@@ -85,9 +85,7 @@ function isToolLocked(toolName: WorkbenchToolName, state: GameState) {
  * a single shared coin pool and shared ingredient inventory in the given
  * order. Skips tools that are disabled, locked (missing island expansion
  * or required level), out of stock, blocked by the player's Buy All
- * settings, or already unaffordable/at their configured inventory cap by
- * the time their turn comes up. A `maxInInventory` of 0 (or unset) is
- * treated as unlimited, matching the settings UI's default value.
+ * settings, or already unaffordable by the time their turn comes up.
  */
 export function planToolPurchases(
   state: GameState,
@@ -115,16 +113,6 @@ export function planToolPurchases(
 
     const stock = state.stock[toolName] ?? new Decimal(0);
     let amount = stock.toDecimalPlaces(0, Decimal.ROUND_DOWN).toNumber();
-
-    if (amount <= 0) return;
-
-    if (buyAllSetting?.maxInInventory) {
-      const currentAmount = (
-        state.inventory[toolName] ?? new Decimal(0)
-      ).toNumber();
-      const room = Math.floor(buyAllSetting.maxInInventory - currentAmount);
-      amount = Math.min(amount, room);
-    }
 
     if (amount <= 0) return;
 
