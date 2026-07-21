@@ -74,6 +74,7 @@ import type { AuctionResults } from "./auctionMachine";
 import type { RaffleSnapshotWinner } from "features/world/ui/chapterRaffles/actions/loadRaffleResults";
 import { onboardingAnalytics } from "lib/onboardingAnalytics";
 import { gameAnalytics } from "lib/gameAnalytics";
+import { mfIdentify, mfSetUser, mfTrack } from "lib/moonforgeAnalytics";
 import { portal } from "features/world/ui/community/actions/portal";
 
 import { CONFIG } from "lib/config";
@@ -347,6 +348,7 @@ export type BlockchainEvent =
   | CommunityEvent
   | SellMarketResourceEvent
   | { type: "REFRESH" }
+  | { type: "DAILY_RESET" }
   | { type: "ACKNOWLEDGE" }
   | { type: "CONTINUE"; id?: string }
   | { type: "RESET" }
@@ -863,6 +865,8 @@ export type BlockchainState = {
     | "blacklisted"
     | "somethingArrived"
     | "seasonChanged"
+    | "dailyReset"
+    | "dailyResetting"
     | "randomising"
     | "competition"
     | "jinAirdrop"
@@ -1623,6 +1627,41 @@ export function startGame(authContext: AuthContext) {
             },
           },
         },
+        dailyReset: {
+          on: {
+            "daily.reset": (GAME_EVENT_HANDLERS as any)["daily.reset"],
+            CONTINUE: {
+              target: "dailyResetting",
+            },
+          },
+        },
+        dailyResetting: {
+          entry: "setTransactionId",
+          invoke: {
+            src: async (context, event) => {
+              const farmId = context.visitorId ?? context.farmId;
+              const data = await saveGame(
+                context,
+                event,
+                farmId,
+                authContext.user.rawToken as string,
+              );
+
+              return data;
+            },
+            onDone: {
+              // Re-run the announcement guards so any new-day modal can pop up
+              target: "notifying",
+              actions: assign((context: Context, event) =>
+                handleSuccessfulSave(context, event),
+              ),
+            },
+            onError: {
+              target: "error",
+              actions: "assignErrorMessage",
+            },
+          },
+        },
         calendarEvent: {
           on: {
             "daily.reset": (GAME_EVENT_HANDLERS as any)["daily.reset"],
@@ -1845,6 +1884,9 @@ export function startGame(authContext: AuthContext) {
             },
             REFRESH: {
               target: "loading",
+            },
+            DAILY_RESET: {
+              target: "dailyReset",
             },
             LANDSCAPE: {
               target: "landscaping",
@@ -2325,6 +2367,14 @@ export function startGame(authContext: AuthContext) {
                 pricePerUnit,
               });
 
+              if (!error) {
+                mfTrack("marketplace_trade", {
+                  item_id: item,
+                  price_sfl: pricePerUnit,
+                  side: "sell",
+                });
+              }
+
               return {
                 farm,
                 error,
@@ -2720,6 +2770,10 @@ export function startGame(authContext: AuthContext) {
               id: context.farmId,
             });
             onboardingAnalytics.logEvent("login");
+            mfIdentify(`account${event.data.analyticsId}`, {
+              farmId: context.farmId,
+            });
+            mfSetUser(`account${event.data.analyticsId}`);
           }
         },
         assignUrl: (context) => {

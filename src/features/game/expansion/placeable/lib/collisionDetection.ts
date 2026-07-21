@@ -91,7 +91,10 @@ const splitBoundingBox = (boundingBox: BoundingBox, height = 1, width = 1) => {
   }));
 };
 
-function detectWaterCollision(expansions: number, boundingBox: BoundingBox) {
+export function detectWaterCollision(
+  expansions: number,
+  boundingBox: BoundingBox,
+) {
   const expansionBoundingBoxes: BoundingBox[] = new Array(expansions)
     .fill(null)
     .map((_, expansionIndex) => ({
@@ -886,6 +889,11 @@ export function detectCollision({
 
 export type AOEItemName =
   | "Basic Scarecrow"
+  // Dedicated cooldown-tracking slot for the Chonky Scarecrow yield boost.
+  // Kept separate from "Basic Scarecrow" (whose slot stores the growth-time
+  // AOE's next-available timestamp) so the two mechanics don't clobber each
+  // other. Never passed to isWithinAOE — only used as a game.aoe key.
+  | "Chonky Scarecrow"
   | "Emerald Turtle"
   | "Tin Turtle"
   | "Sir Goldensnout"

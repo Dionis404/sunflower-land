@@ -18,6 +18,7 @@ import {
   isWithinAOE,
 } from "features/game/expansion/placeable/lib/collisionDetection";
 import { FACTION_ITEMS } from "features/game/lib/factions";
+import { getSkillLevel, SKILL_RANKS } from "features/game/types/bumpkinSkills";
 import { getBudYieldBoosts } from "features/game/lib/getBudYieldBoosts";
 import { isWearableActive } from "features/game/lib/wearables";
 import { COLLECTIBLES_DIMENSIONS } from "features/game/types/craftables";
@@ -38,6 +39,7 @@ import { produce } from "immer";
 import { STONE_RECOVERY_TIME } from "features/game/lib/constants";
 import { hasFeatureAccess } from "lib/flags";
 import { canMine, getMineReadyAt } from "features/game/lib/resourceNodes";
+import { mfTrack } from "lib/moonforgeAnalytics";
 
 export type LandExpansionStoneMineAction = {
   type: "stoneRock.mined";
@@ -82,9 +84,11 @@ export function getStoneRecoveryTimeForDisplay({ game }: { game: GameState }): {
   let totalSeconds = STONE_RECOVERY_TIME;
   const boostsUsed: { name: BoostName; value: string }[] = [];
 
-  if (skills["Speed Miner"]) {
-    totalSeconds = totalSeconds * 0.8;
-    boostsUsed.push({ name: "Speed Miner", value: "x0.8" });
+  const speedMinerLevel = getSkillLevel(skills, "Speed Miner");
+  if (speedMinerLevel) {
+    const v = SKILL_RANKS["Speed Miner"].ranks[speedMinerLevel - 1];
+    totalSeconds = totalSeconds * v;
+    boostsUsed.push({ name: "Speed Miner", value: `x${v}` });
   }
 
   // Under SPEED_BOOSTS the temporary stone boosts (totems, Ore Hourglass, Badger
@@ -228,19 +232,27 @@ export function getStoneDropAmount({
     boostsUsed.push({ name: "Stone Beetle", value: "+0.1" });
   }
 
-  if (skills["Rock'N'Roll"]) {
-    amount += 0.1;
-    boostsUsed.push({ name: "Rock'N'Roll", value: "+0.1" });
+  const rockAndRollLevel = getSkillLevel(skills, "Rock'N'Roll");
+  if (rockAndRollLevel) {
+    const v = SKILL_RANKS["Rock'N'Roll"].ranks[rockAndRollLevel - 1];
+    amount += v;
+    boostsUsed.push({ name: "Rock'N'Roll", value: `+${v}` });
   }
 
-  if (skills["Rocky Favor"]) {
-    amount += 1;
-    boostsUsed.push({ name: "Rocky Favor", value: "+1" });
+  // Rocky Favor: buff to Stone yield (debuff to Iron applied in ironMine)
+  const rockyFavorLevel = getSkillLevel(skills, "Rocky Favor");
+  if (rockyFavorLevel) {
+    const v = SKILL_RANKS["Rocky Favor"].buff[rockyFavorLevel - 1];
+    amount += v;
+    boostsUsed.push({ name: "Rocky Favor", value: `+${v}` });
   }
 
-  if (skills["Ferrous Favor"]) {
-    amount -= 0.5;
-    boostsUsed.push({ name: "Ferrous Favor", value: "-0.5" });
+  // Ferrous Favor: debuff to Stone yield (buff to Iron applied in ironMine)
+  const ferrousFavorLevel = getSkillLevel(skills, "Ferrous Favor");
+  if (ferrousFavorLevel) {
+    const v = SKILL_RANKS["Ferrous Favor"].debuff[ferrousFavorLevel - 1];
+    amount -= v;
+    boostsUsed.push({ name: "Ferrous Favor", value: `-${v}` });
   }
 
   // Add native critical hit before the AoE boosts
@@ -505,6 +517,11 @@ export function mineStone({
       ],
       createdAt,
     });
+    mfTrack("resource_collected", {
+      resource_type: stoneName,
+      amount: stoneMined.toNumber(),
+    });
+
     delete rock.stone.amount;
     delete rock.stone.criticalHit;
 

@@ -29,6 +29,7 @@ import type {
 import { updateBoostUsed } from "features/game/types/updateBoostUsed";
 import { produce } from "immer";
 import { prngChance } from "lib/prng";
+import { mfTrack } from "lib/moonforgeAnalytics";
 
 export enum CHOP_ERRORS {
   MISSING_AXE = "No axe",
@@ -556,6 +557,11 @@ export function chop({
       `${treeName === "Tree" ? "Basic Tree" : treeName} Chopped`,
       stateCopy.farmActivity,
     );
+
+    mfTrack("resource_collected", {
+      resource_type: "Wood",
+      amount: Number(woodHarvested),
+    });
 
     delete tree.wood.amount;
     delete tree.wood.seed;
