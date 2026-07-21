@@ -14,7 +14,11 @@ export function getBulkFeedExclusions(): CookableName[] {
     return [];
   }
 
-  return JSON.parse(cached);
+  try {
+    return JSON.parse(cached);
+  } catch {
+    return [];
+  }
 }
 
 export function setBulkFeedExclusions(exclusions: CookableName[]) {
