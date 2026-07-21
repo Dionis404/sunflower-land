@@ -52,6 +52,9 @@ import {
 import { NPC_WEARABLES } from "lib/npcs";
 import { ConfirmationModal } from "components/ui/ConfirmationModal";
 import { formatNumber, setPrecision } from "lib/utils/formatNumber";
+import { useVipAccess } from "lib/utils/hooks/useVipAccess";
+import { ModalContext } from "features/game/components/modal/ModalProvider";
+import vipIcon from "assets/icons/vip.webp";
 
 import { Restock } from "./restock/Restock";
 import { planSeedPurchases } from "./lib/planSeedPurchases";
@@ -94,9 +97,12 @@ const _state = (state: MachineState) => state.context.state;
 
 export const SeasonalSeeds: React.FC = () => {
   const { gameService, shortcutItem } = useContext(Context);
+  const { openModal } = useContext(ModalContext);
   const state = useSelector(gameService, _state);
   const { inventory, coins, island, bumpkin, season } = state;
   const currentSeason = season.season;
+  const isVIP = useVipAccess({ game: state });
+  const canShowBuyAll = hasRequiredIslandExpansion(island.type, "spring");
   // Sort the seeds by their default order
   const currentSeasonSeeds = getKeys(SEEDS).filter((seed) =>
     SEASONAL_SEEDS[currentSeason].includes(seed),
@@ -482,48 +488,6 @@ export const SeasonalSeeds: React.FC = () => {
                 </Label>
               )}
             </div>
-            {buyAllPlan.purchases.length > 0 && (
-              <Button
-                className="mb-2"
-                onClick={() => {
-                  setBuyAllFailures([]);
-                  showConfirmBuyAllModal(true);
-                }}
-              >
-                {t("seeds.buyAll")}
-              </Button>
-            )}
-            {buyAllFailures.length > 0 && (
-              <Label type="danger" className="mb-2">
-                {t("seeds.buyAllPartialFailure", {
-                  seeds: buyAllFailures.join(", "),
-                })}
-              </Label>
-            )}
-            <ConfirmationModal
-              show={confirmBuyAllModal}
-              onHide={() => showConfirmBuyAllModal(false)}
-              messages={[
-                t("confirmation.buyAllSeeds", {
-                  seedTypes: buyAllPlan.purchases.length,
-                  coinAmount: formatNumber(buyAllPlan.totalCost),
-                }),
-              ]}
-              bodyContent={
-                <div className="w-full max-h-32 overflow-y-auto scrollable mt-1">
-                  {buyAllPlan.purchases.map(({ seedName, amount }) => (
-                    <p key={seedName} className="text-xs w-full text-left">
-                      {`${amount} x ${seedName}`}
-                    </p>
-                  ))}
-                </div>
-              }
-              onCancel={() => showConfirmBuyAllModal(false)}
-              onConfirm={buyAllSeeds}
-              confirmButtonLabel={t("seeds.buyAll")}
-              bumpkinParts={NPC_WEARABLES.betty}
-              disabled={coins < buyAllPlan.totalCost}
-            />
             <div className="flex flex-wrap mb-2">
               {currentSeasonSeeds.map((name: SeedName) => (
                 <Box
@@ -608,6 +572,59 @@ export const SeasonalSeeds: React.FC = () => {
               </div>
             </div>
           )}
+          {canShowBuyAll && buyAllPlan.purchases.length > 0 && (
+            <div className="flex flex-col items-center mb-2">
+              <Button
+                className="relative"
+                onClick={() => {
+                  if (!isVIP) {
+                    openModal("BUY_BANNER");
+                    return;
+                  }
+                  setBuyAllFailures([]);
+                  showConfirmBuyAllModal(true);
+                }}
+              >
+                <img
+                  src={vipIcon}
+                  alt="VIP"
+                  className="absolute w-6 sm:w-4 -top-[1px] -right-[2px]"
+                />
+                {t("seeds.buyAll")}
+              </Button>
+              {buyAllFailures.length > 0 && (
+                <Label type="danger" className="mt-1">
+                  {t("seeds.buyAllPartialFailure", {
+                    seeds: buyAllFailures.join(", "),
+                  })}
+                </Label>
+              )}
+            </div>
+          )}
+          <ConfirmationModal
+            show={confirmBuyAllModal}
+            onHide={() => showConfirmBuyAllModal(false)}
+            messages={[
+              t("confirmation.buyAllSeeds", {
+                seedTypes: buyAllPlan.purchases.length,
+                coinAmount: formatNumber(buyAllPlan.totalCost),
+              }),
+            ]}
+            bodyContent={
+              <div className="w-full max-h-32 overflow-y-auto scrollable mt-1">
+                {buyAllPlan.purchases.map(({ seedName, amount }) => (
+                  <p key={seedName} className="text-xs w-full text-left">
+                    {`${amount} x ${seedName}`}
+                  </p>
+                ))}
+              </div>
+            }
+            onCancel={() => showConfirmBuyAllModal(false)}
+            onConfirm={buyAllSeeds}
+            confirmButtonLabel={t("seeds.buyAll")}
+            bumpkinParts={NPC_WEARABLES.betty}
+            disabled={!isVIP || coins < buyAllPlan.totalCost}
+          />
         </div>
       }
     />
