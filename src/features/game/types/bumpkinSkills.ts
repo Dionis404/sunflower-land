@@ -162,11 +162,27 @@ export type SkillUpgrade = {
   effect: SkillRankEffect;
 };
 
+// Skill points charged for a single rank-up, keyed on the skill's tier.
+const UPGRADE_POINTS_BY_TIER: Record<BumpkinSkillTier, number> = {
+  1: 1,
+  2: 3,
+  3: 6,
+};
+
 // Cost of a single rank-up for a skill of the given tier (flat per upgrade).
 export const getSkillUpgradeCost = (tier: BumpkinSkillTier) => ({
   shards: tier,
-  points: tier * 3,
+  points: UPGRADE_POINTS_BY_TIER[tier],
 });
+
+// Same-tree tier that must be unlocked (via getUnlockedTierForTree) to buy the
+// rank-up FROM `currentRank`. Each rank demands one more tier of tree progression
+// beyond the skill's own tier, capped at the max tier (3). So a Tier 1 skill needs
+// Tier 2 for Rank 2 and Tier 3 for Rank 3; Tier 2/3 skills need Tier 3 for any rank.
+export const getSkillUpgradeTierRequirement = (
+  tier: BumpkinSkillTier,
+  currentRank: number,
+): BumpkinSkillTier => Math.min(3, tier + currentRank) as BumpkinSkillTier;
 
 // Current rank of a skill: 0 = not owned, otherwise 1..maxLevel (the rank is
 // stored directly as the skill's value in `bumpkin.skills`). Clamped to a valid
@@ -261,6 +277,24 @@ export type SkillRankEffect =
       kind: "rateWithGrowthDebuff";
       rate: readonly [number, number, number]; // fraction ADDED to the honey production rate
       growth: readonly [number, number, number]; // flower growth-time multiplier debuff (1.5 = +50%)
+    }
+  | {
+      kind: "costWithDebuff";
+      buff: readonly [number, number, number]; // feed-cost multiplier for the favoured animal
+      debuff: readonly [number, number, number]; // feed-cost multiplier for every other animal
+    }
+  | {
+      kind: "xpWithFeedDebuff";
+      xp: readonly [number, number, number]; // animal-XP multiplier from feed
+      feed: readonly [number, number, number]; // feed-cost multiplier debuff
+    }
+  | {
+      kind: "sicknessWithSpread";
+      sickness: readonly [number, number, number]; // multiplier on the whole sickness chance
+      // Multiplier on the per-sick-animal spread term, applied BEFORE it is added
+      // to the base chance. Rank 1 is a neutral 1, so it reproduces the original
+      // "halve everything" behaviour; only ranks 2/3 shrink the spread.
+      spread: readonly [number, number, number];
     };
 
 // Shared AOE footprint progression — Chonky Scarecrow / Horror Mike / Laurie's
@@ -1682,6 +1716,11 @@ export const BUMPKIN_REVAMP_SKILL_TREE = {
   "Efficient Feeding": {
     name: "Efficient Feeding",
     tree: "Animals",
+    // -5% / -6% / -7.5% feed to feed all animals.
+    upgrade: {
+      maxLevel: 3,
+      effect: { kind: "costMultiplier", ranks: [0.95, 0.94, 0.925] },
+    },
     disabled: false,
     requirements: {
       points: 1,
@@ -1700,6 +1739,11 @@ export const BUMPKIN_REVAMP_SKILL_TREE = {
   "Restless Animals": {
     name: "Restless Animals",
     tree: "Animals",
+    // -10% / -15% / -20% animal sleep time.
+    upgrade: {
+      maxLevel: 3,
+      effect: { kind: "growthMultiplier", ranks: [0.9, 0.85, 0.8] },
+    },
     disabled: false,
     requirements: {
       points: 1,
@@ -1718,6 +1762,11 @@ export const BUMPKIN_REVAMP_SKILL_TREE = {
   "Fine Fibers": {
     name: "Fine Fibers",
     tree: "Animals",
+    // +0.1 / +0.15 / +0.2 Feather, Leather and Merino Wool yield.
+    upgrade: {
+      maxLevel: 3,
+      effect: { kind: "additiveYield", ranks: [0.1, 0.15, 0.2] },
+    },
     disabled: false,
     requirements: {
       points: 1,
@@ -1737,6 +1786,11 @@ export const BUMPKIN_REVAMP_SKILL_TREE = {
   "Bountiful Bounties": {
     name: "Bountiful Bounties",
     tree: "Animals",
+    // +50% / +75% / +100% Coins from Animal Bounties.
+    upgrade: {
+      maxLevel: 3,
+      effect: { kind: "coinBonus", ranks: [0.5, 0.75, 1] },
+    },
     disabled: false,
     requirements: {
       points: 1,
@@ -1755,6 +1809,13 @@ export const BUMPKIN_REVAMP_SKILL_TREE = {
   "Double Bale": {
     name: "Double Bale",
     tree: "Animals",
+    // 2x / 2.5x / 3x Bale's effect. Bale's base boost is a decimal (0.1), so the
+    // consumer must scale it in Decimal — 0.1 * 3 drifts to 0.30000000000000004
+    // in float.
+    upgrade: {
+      maxLevel: 3,
+      effect: { kind: "multiplier", ranks: [2, 2.5, 3] },
+    },
     disabled: false,
     requirements: {
       points: 1,
@@ -1793,6 +1854,16 @@ export const BUMPKIN_REVAMP_SKILL_TREE = {
   Featherweight: {
     name: "Featherweight",
     tree: "Animals",
+    // +0.35 / +0.45 / +0.55 Feather yield; the debuff is subtracted from BOTH
+    // Leather and Merino Wool.
+    upgrade: {
+      maxLevel: 3,
+      effect: {
+        kind: "yieldWithDebuff",
+        buff: [0.35, 0.45, 0.55],
+        debuff: [0.1, 0.15, 0.2],
+      },
+    },
     disabled: false,
     requirements: {
       points: 1,
@@ -1818,6 +1889,11 @@ export const BUMPKIN_REVAMP_SKILL_TREE = {
   "Abundant Harvest": {
     name: "Abundant Harvest",
     tree: "Animals",
+    // +0.2 / +0.35 / +0.5 Egg, Wool and Milk yield.
+    upgrade: {
+      maxLevel: 3,
+      effect: { kind: "additiveYield", ranks: [0.2, 0.35, 0.5] },
+    },
     disabled: false,
     requirements: {
       points: 2,
@@ -1837,6 +1913,11 @@ export const BUMPKIN_REVAMP_SKILL_TREE = {
   "Heartwarming Instruments": {
     name: "Heartwarming Instruments",
     tree: "Animals",
+    // +50% / +60% / +70% Animal XP from affection tools.
+    upgrade: {
+      maxLevel: 3,
+      effect: { kind: "xpBonus", ranks: [0.5, 0.6, 0.7] },
+    },
     disabled: false,
     requirements: {
       points: 2,
@@ -1856,6 +1937,12 @@ export const BUMPKIN_REVAMP_SKILL_TREE = {
   "Kale Mix": {
     name: "Kale Mix",
     tree: "Animals",
+    // Mixed Grain requires 3 / 2.5 / 2 Kale instead. An absolute ingredient
+    // amount, not a delta — the consumer builds a Decimal, so 2.5 is exact.
+    upgrade: {
+      maxLevel: 3,
+      effect: { kind: "flatBonus", ranks: [3, 2.5, 2] },
+    },
     disabled: false,
     requirements: {
       points: 2,
@@ -1875,6 +1962,10 @@ export const BUMPKIN_REVAMP_SKILL_TREE = {
   "Alternate Medicine": {
     tree: "Animals",
     name: "Alternate Medicine",
+    // Not upgradeable yet. Ranks 2/3 add a produce boost for the next 3 harvests
+    // on top of the (rank-invariant) ingredient discount, which needs the animal
+    // feedBuff slot and a conflict rule against Salt Lick / Honey Treat. Left
+    // un-ranked rather than shipping ranks that charge shards for no effect.
     disabled: false,
     requirements: {
       points: 2,
@@ -1893,6 +1984,17 @@ export const BUMPKIN_REVAMP_SKILL_TREE = {
   "Healthy Livestock": {
     name: "Healthy Livestock",
     tree: "Animals",
+    // -50% sickness chance at every rank; only the spread shrinks (-0% / -50% /
+    // -99%). Consumed server-side only (the sickness roll lives on the API), so
+    // there is no FE read of these ranks.
+    upgrade: {
+      maxLevel: 3,
+      effect: {
+        kind: "sicknessWithSpread",
+        sickness: [0.5, 0.5, 0.5],
+        spread: [1, 0.5, 0.01],
+      },
+    },
     disabled: false,
     requirements: {
       points: 2,
@@ -1911,6 +2013,16 @@ export const BUMPKIN_REVAMP_SKILL_TREE = {
   "Merino Whisperer": {
     name: "Merino Whisperer",
     tree: "Animals",
+    // +0.35 / +0.6 / +0.9 Merino Wool yield; the debuff is subtracted from BOTH
+    // Leather and Feather.
+    upgrade: {
+      maxLevel: 3,
+      effect: {
+        kind: "yieldWithDebuff",
+        buff: [0.35, 0.6, 0.9],
+        debuff: [0.1, 0.15, 0.2],
+      },
+    },
     disabled: false,
     requirements: {
       points: 2,
@@ -1936,6 +2048,16 @@ export const BUMPKIN_REVAMP_SKILL_TREE = {
   "Clucky Grazing": {
     name: "Clucky Grazing",
     tree: "Animals",
+    // -25% / -35% / -50% feed for Chickens; +50% / +55% / +65% for every other
+    // animal.
+    upgrade: {
+      maxLevel: 3,
+      effect: {
+        kind: "costWithDebuff",
+        buff: [0.75, 0.65, 0.5],
+        debuff: [1.5, 1.55, 1.65],
+      },
+    },
     disabled: false,
     requirements: {
       points: 3,
@@ -1959,6 +2081,16 @@ export const BUMPKIN_REVAMP_SKILL_TREE = {
   "Sheepwise Diet": {
     name: "Sheepwise Diet",
     tree: "Animals",
+    // -25% / -35% / -50% feed for Sheep; +50% / +55% / +65% for every other
+    // animal.
+    upgrade: {
+      maxLevel: 3,
+      effect: {
+        kind: "costWithDebuff",
+        buff: [0.75, 0.65, 0.5],
+        debuff: [1.5, 1.55, 1.65],
+      },
+    },
     disabled: false,
     requirements: {
       points: 3,
@@ -1982,6 +2114,16 @@ export const BUMPKIN_REVAMP_SKILL_TREE = {
   "Cow-Smart Nutrition": {
     name: "Cow-Smart Nutrition",
     tree: "Animals",
+    // -25% / -35% / -50% feed for Cows; +50% / +55% / +65% for every other
+    // animal.
+    upgrade: {
+      maxLevel: 3,
+      effect: {
+        kind: "costWithDebuff",
+        buff: [0.75, 0.65, 0.5],
+        debuff: [1.5, 1.55, 1.65],
+      },
+    },
     disabled: false,
     requirements: {
       points: 3,
@@ -2005,6 +2147,16 @@ export const BUMPKIN_REVAMP_SKILL_TREE = {
   "Chonky Feed": {
     name: "Chonky Feed",
     tree: "Animals",
+    // 2x / 2.5x / 3x animal XP from feed; +50% / +75% / +100% feed cost. Every
+    // ANIMAL_FOOD_EXPERIENCE value is even, so the 2.5x rank stays integral.
+    upgrade: {
+      maxLevel: 3,
+      effect: {
+        kind: "xpWithFeedDebuff",
+        xp: [2, 2.5, 3],
+        feed: [1.5, 1.75, 2],
+      },
+    },
     disabled: false,
     requirements: {
       points: 3,
@@ -2030,6 +2182,17 @@ export const BUMPKIN_REVAMP_SKILL_TREE = {
   "Leathercraft Mastery": {
     name: "Leathercraft Mastery",
     tree: "Animals",
+    // +0.35 / +0.6 / +0.8 Leather yield; the debuff is subtracted from BOTH
+    // Feather and Merino Wool. Rank 3 is 0.8 (not 0.9) per the sheet — the
+    // asymmetry with Merino Whisperer is intentional.
+    upgrade: {
+      maxLevel: 3,
+      effect: {
+        kind: "yieldWithDebuff",
+        buff: [0.35, 0.6, 0.8],
+        debuff: [0.1, 0.15, 0.2],
+      },
+    },
     disabled: false,
     requirements: {
       points: 3,
@@ -2053,6 +2216,19 @@ export const BUMPKIN_REVAMP_SKILL_TREE = {
   "Barnyard Rouse": {
     name: "Barnyard Rouse",
     tree: "Animals",
+    // 5 / 4 / 3.5 day cooldown. Resolved generically by getSkillCooldown, so no
+    // consumer change is needed.
+    upgrade: {
+      maxLevel: 3,
+      effect: {
+        kind: "cooldown",
+        ranks: [
+          1000 * 60 * 60 * 24 * 5,
+          1000 * 60 * 60 * 24 * 4,
+          1000 * 60 * 60 * 24 * 3.5,
+        ],
+      },
+    },
     disabled: false,
     requirements: {
       points: 3,
@@ -4452,6 +4628,32 @@ export const SKILL_RANKS = {
   "Sea Blessed": BUMPKIN_REVAMP_SKILL_TREE["Sea Blessed"].upgrade.effect,
   Ager: BUMPKIN_REVAMP_SKILL_TREE["Ager"].upgrade.effect,
   "Salt Surge": BUMPKIN_REVAMP_SKILL_TREE["Salt Surge"].upgrade.effect,
+  "Efficient Feeding":
+    BUMPKIN_REVAMP_SKILL_TREE["Efficient Feeding"].upgrade.effect,
+  "Restless Animals":
+    BUMPKIN_REVAMP_SKILL_TREE["Restless Animals"].upgrade.effect,
+  "Fine Fibers": BUMPKIN_REVAMP_SKILL_TREE["Fine Fibers"].upgrade.effect,
+  "Bountiful Bounties":
+    BUMPKIN_REVAMP_SKILL_TREE["Bountiful Bounties"].upgrade.effect,
+  "Double Bale": BUMPKIN_REVAMP_SKILL_TREE["Double Bale"].upgrade.effect,
+  Featherweight: BUMPKIN_REVAMP_SKILL_TREE["Featherweight"].upgrade.effect,
+  "Abundant Harvest":
+    BUMPKIN_REVAMP_SKILL_TREE["Abundant Harvest"].upgrade.effect,
+  "Heartwarming Instruments":
+    BUMPKIN_REVAMP_SKILL_TREE["Heartwarming Instruments"].upgrade.effect,
+  "Kale Mix": BUMPKIN_REVAMP_SKILL_TREE["Kale Mix"].upgrade.effect,
+  "Healthy Livestock":
+    BUMPKIN_REVAMP_SKILL_TREE["Healthy Livestock"].upgrade.effect,
+  "Merino Whisperer":
+    BUMPKIN_REVAMP_SKILL_TREE["Merino Whisperer"].upgrade.effect,
+  "Clucky Grazing": BUMPKIN_REVAMP_SKILL_TREE["Clucky Grazing"].upgrade.effect,
+  "Sheepwise Diet": BUMPKIN_REVAMP_SKILL_TREE["Sheepwise Diet"].upgrade.effect,
+  "Cow-Smart Nutrition":
+    BUMPKIN_REVAMP_SKILL_TREE["Cow-Smart Nutrition"].upgrade.effect,
+  "Chonky Feed": BUMPKIN_REVAMP_SKILL_TREE["Chonky Feed"].upgrade.effect,
+  "Leathercraft Mastery":
+    BUMPKIN_REVAMP_SKILL_TREE["Leathercraft Mastery"].upgrade.effect,
+  "Barnyard Rouse": BUMPKIN_REVAMP_SKILL_TREE["Barnyard Rouse"].upgrade.effect,
 } satisfies Record<UpgradeableSkillName, SkillRankEffect>;
 
 // Runtime guard co-located with SKILL_RANKS so callers can narrow to an
@@ -4459,6 +4661,80 @@ export const SKILL_RANKS = {
 export const isUpgradeableSkillName = (
   name: BumpkinRevampSkillName,
 ): name is UpgradeableSkillName => name in SKILL_RANKS;
+
+// Upgradeable Cooking/Crops skills whose upgraded rank is neutralised on the
+// CHAPTER_CROP_WEEK event items (the Saltwort crop and the Saltbite recipe).
+// Derived from the tree (tree === Cooking/Crops + an `upgrade` block) so it can
+// never drift from which skills are actually upgradeable.
+// Module-private so no other module can mutate this shared set (it drives the
+// event-item downgrade + the "boosts paused" notice); callers use the helpers below.
+const CHAPTER_CROP_WEEK_DOWNGRADED_SKILLS: Set<UpgradeableSkillName> = new Set(
+  getKeys(BUMPKIN_REVAMP_SKILL_TREE).filter(
+    (name): name is UpgradeableSkillName => {
+      const { tree } = BUMPKIN_REVAMP_SKILL_TREE[name];
+      return (tree === "Cooking" || tree === "Crops") && name in SKILL_RANKS;
+    },
+  ),
+);
+
+// Returns `skills` with every upgradeable Cooking/Crops skill capped at rank 1
+// (the base skill still applies, but the upgraded rank grants no extra bonus).
+// Used to neutralise upgraded skill effects on the CHAPTER_CROP_WEEK event items
+// WITHOUT mutating the player's real ranks — callers pass the result only into the
+// Saltwort/Saltbite boost math and keep the original ranks everywhere else. Returns
+// the original object untouched when nothing needs capping (the common case).
+export const downgradeChapterCropWeekSkills = (skills: Skills): Skills => {
+  let result: Skills | undefined;
+  for (const name of CHAPTER_CROP_WEEK_DOWNGRADED_SKILLS) {
+    if ((skills[name] ?? 0) > 1) {
+      result = result ?? { ...skills };
+      result[name] = 1;
+    }
+  }
+  return result ?? skills;
+};
+
+// The upgradeable skills whose downgrade actually changes a CHAPTER_CROP_WEEK
+// event item's result: Saltwort is a MEDIUM plot crop and Saltbite is a Fire-Pit
+// (non-cake) recipe, so only the skills that mechanically apply to those are
+// listed — e.g. Frosted Cakes (cakes only) and basic/advanced farmer skills are
+// excluded because they can never affect Saltbite / medium Saltwort.
+//
+// `downgradeChapterCropWeekSkills` intentionally caps the WHOLE Crops/Cooking tree
+// (a correct superset — capping an inapplicable skill is a no-op for the event
+// item), so mechanics stay robust to crop/recipe tweaks; this list is a subset of
+// it, so the notice can never claim a suppression the mechanics don't make.
+const CHAPTER_CROP_WEEK_NOTICE_SKILLS: Record<
+  "Crops" | "Cooking",
+  readonly UpgradeableSkillName[]
+> = {
+  // Green Thumb (growth, all crops), Experienced Farmer (medium yield), Acre Farm
+  // (debuffs medium), Hectare Farm (buffs medium), Horror Mike (Scary Mike AOE,
+  // medium). See getCropYieldAmount / getCropPlotTime for the class gates.
+  Crops: [
+    "Green Thumb",
+    "Experienced Farmer",
+    "Acre Farm",
+    "Hectare Farm",
+    "Horror Mike",
+  ],
+  // Double Nom (cost + food, all recipes), Fast Feasts (Fire Pit time), Swift
+  // Sizzle (Fire Pit oil), Fiery Jackpot (Fire Pit crit). See cook / collectRecipe.
+  Cooking: ["Double Nom", "Fast Feasts", "Swift Sizzle", "Fiery Jackpot"],
+};
+
+// Whether the player owns an UPGRADED (rank 2+) skill that the CHAPTER_CROP_WEEK
+// event actually neutralises for its item. Drives the "ascension boosts paused"
+// notice in the Market (Crops → Saltwort) and Fire Pit (Cooking → Saltbite) — a
+// rank-1 skill still applies its base effect, and a skill that can't affect the
+// event item never counts, so the notice only shows a real, suppressed boost.
+export const hasUpgradedChapterCropWeekSkill = (
+  skills: Skills,
+  tree: "Crops" | "Cooking",
+): boolean =>
+  CHAPTER_CROP_WEEK_NOTICE_SKILLS[tree].some(
+    (name) => (skills[name] ?? 0) >= 2,
+  );
 
 // Effective "1 in N" gold chance shown to players for Golden Sunflower per rank.
 // Derived from the mechanical dropChance so the display can't drift: prngChance

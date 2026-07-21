@@ -193,7 +193,7 @@ const FEATURE_FLAGS = {
   // be toggled independently of the rest of the ascension system (islands,
   // expansion, level bands). Skill *effects* still apply off the stored rank
   // regardless of this flag; only purchasing new ranks is gated here.
-  ASCENSION_SKILLS: testnetFeatureFlag,
+  ASCENSION_SKILLS: betaFeatureFlag,
 } satisfies Record<string, FeatureFlag>;
 
 export type FeatureName = keyof typeof FEATURE_FLAGS;
