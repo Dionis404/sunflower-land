@@ -188,12 +188,16 @@ const FEATURE_FLAGS = {
 
   SWAMP_ASCENSION: betaFeatureFlag,
 
+  // Bulk Mixer tab in the feeder machine: mix the missing feed for every
+  // waiting animal at once. Beta-pass / testnet only until it ships.
+  BULK_MIXER: betaFeatureFlag,
+
   // Per-rank skill upgrades (spend Ascension Shards + skill points to rank up a
   // skill). Kept on its own flag so the upgrade UI + `skill.upgraded` event can
   // be toggled independently of the rest of the ascension system (islands,
   // expansion, level bands). Skill *effects* still apply off the stored rank
   // regardless of this flag; only purchasing new ranks is gated here.
-  ASCENSION_SKILLS: testnetFeatureFlag,
+  ASCENSION_SKILLS: betaFeatureFlag,
 } satisfies Record<string, FeatureFlag>;
 
 export type FeatureName = keyof typeof FEATURE_FLAGS;
