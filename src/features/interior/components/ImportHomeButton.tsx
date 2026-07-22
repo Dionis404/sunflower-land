@@ -24,7 +24,6 @@ import {
 const _hasHomeItems = (state: MachineState) =>
   hasHomeItemsToImport(state.context.state);
 
-// Migration is a beta-only mechanic.
 const _canMigrate = (state: MachineState) =>
   hasFeatureAccess(state.context.state, "HOME_ITEM_MIGRATION");
 

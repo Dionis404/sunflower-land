@@ -184,7 +184,7 @@ const FEATURE_FLAGS = {
   SPEED_BOOSTS: usernameFeatureFlag,
 
   // Importing leftover items from the old home into the new interior.
-  HOME_ITEM_MIGRATION: betaFeatureFlag,
+  HOME_ITEM_MIGRATION: () => true,
 
   SWAMP_ASCENSION: betaFeatureFlag,
 
