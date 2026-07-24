@@ -175,11 +175,11 @@ export const ToolBatchBuyModal: React.FC<Props> = ({
     title: string,
     columnTools: [WorkbenchToolName, Tool][],
   ) => (
-    <OuterPanel className="w-80">
+    <OuterPanel className="w-full sm:w-80">
       <Label type="default" className="mb-1.5">
         {title}
       </Label>
-      <div className="flex flex-col max-h-[420px] overflow-y-auto scrollable">
+      <div className="flex flex-col sm:max-h-[420px] sm:overflow-y-auto scrollable">
         {columnTools.map(([toolName]) => {
           const isExcluded = excluded.has(toolName);
           const maxAmount = maxAmounts[toolName] ?? 0;
@@ -255,7 +255,7 @@ export const ToolBatchBuyModal: React.FC<Props> = ({
         bumpkinParts={NPC_WEARABLES.blacksmith}
       >
         <div className="flex flex-col p-1">
-          <div className="flex items-start justify-center space-x-4">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-start justify-center gap-4">
             {renderColumn(t("landTools"), landTools)}
             {renderColumn(t("waterTools"), waterTools)}
           </div>

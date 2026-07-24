@@ -209,11 +209,10 @@ export const Tools: React.FC = () => {
           (() => {
             const craftAllAmount = maxAffordableAmount();
 
+            if (craftAllAmount <= 0) return null;
+
             return (
-              <Button
-                disabled={craftAllAmount <= 0}
-                onClick={(e) => craft(e, craftAllAmount)}
-              >
+              <Button onClick={(e) => craft(e, craftAllAmount)}>
                 {t("craft")} {craftAllAmount}
               </Button>
             );
