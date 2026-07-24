@@ -172,7 +172,7 @@ describe("planSeedPurchases", () => {
     const plan = planSeedPurchases(state, ["Sunflower Seed"]);
 
     expect(plan.purchases).toHaveLength(1);
-    expect(plan.purchases[0].amount).toBeGreaterThanOrEqual(1);
+    expect(plan.purchases[0].amount).toBe(1);
   });
 
   it("skips full moon seeds outside of a full moon", () => {
