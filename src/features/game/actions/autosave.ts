@@ -1,0 +1,247 @@
+import { CONFIG } from "lib/config";
+import { ERRORS } from "lib/errors";
+import { sanitizeHTTPResponse } from "lib/network";
+import type { GameEvent, GameEventName } from "../events";
+import type { PastAction } from "../lib/gameMachine";
+import { makeGame } from "../lib/transforms";
+import { getSessionId } from "./loadSession";
+import Decimal from "decimal.js-light";
+import type { SeedBoughtAction } from "../events/landExpansion/seedBought";
+import type { GameState } from "../types/game";
+import { AUTO_SAVE_INTERVAL } from "../expansion/Game";
+import { flushMetrics } from "../lib/interactionMetrics";
+import { getRecordHash } from "lib/stateHash";
+
+type StateHash = Record<keyof GameState, string>;
+
+/**
+ * Returns a hash of each field in the gamestate
+ * { balance: "sha256:1234567890", inventory: "sha256:1234567890", ... }
+ */
+export async function getGameHash(gameState: GameState): Promise<StateHash> {
+  return (await getRecordHash(
+    gameState as unknown as Record<string, unknown>,
+  )) as StateHash;
+}
+
+type Request = {
+  actions: PastAction[];
+  farmId: number;
+  sessionId: string;
+  token: string;
+  fingerprint: string;
+  deviceTrackerId: string;
+  transactionId: string;
+  state: GameState;
+};
+
+const API_URL = CONFIG.API_URL;
+const API2_URL = CONFIG.API2_URL;
+
+const EXCLUDED_EVENTS: GameEventName<GameEvent>[] = ["bot.detected"];
+
+/**
+ * Squashes similar events into a single event
+ * Filters out UI only events
+ */
+export function squashEvents(events: PastAction[]): PastAction[] {
+  return events.reduce((items, event, index) => {
+    if (EXCLUDED_EVENTS.includes(event.type)) {
+      return items;
+    }
+
+    if (index > 0) {
+      const previous = items[items.length - 1];
+
+      const isShopEvent =
+        event.type === "seed.bought" && previous.type === "seed.bought";
+
+      // We can combine the amounts when buying/selling the same item
+      if (isShopEvent && event.item === previous.item) {
+        return [
+          ...items.slice(0, -1),
+          {
+            ...event,
+            amount: new Decimal((previous as SeedBoughtAction).amount)
+              .plus(new Decimal(event.amount))
+              .toNumber(),
+          } as PastAction,
+        ];
+      }
+    }
+
+    return [...items, event];
+  }, [] as PastAction[]);
+}
+
+export function serialize(events: PastAction[]) {
+  return events.map((action) => ({
+    ...action,
+    createdAt: new Date(action.createdAt.getTime()).toISOString(),
+  }));
+}
+
+export async function autosaveRequest(
+  request: Omit<Request, "actions" | "state"> & {
+    actions: any[];
+    stateHash?: Record<keyof GameState, string>;
+  },
+  apiUrl: string = API_URL,
+) {
+  const ttl = (window as any)["x-amz-ttl"];
+
+  // Useful for using cached results
+  const cachedKey = getSessionId();
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => {
+    controller.abort();
+  }, AUTO_SAVE_INTERVAL);
+
+  try {
+    return await window.fetch(`${apiUrl}/autosave/${request.farmId}`, {
+      method: "POST",
+      headers: {
+        ...{
+          "content-type": "application/json;charset=UTF-8",
+          Authorization: `Bearer ${request.token}`,
+          "X-Fingerprint": request.fingerprint,
+          "X-Transaction-ID": request.transactionId,
+        },
+        ...(ttl ? { "X-Amz-TTL": (window as any)["x-amz-ttl"] } : {}),
+      },
+      body: JSON.stringify({
+        sessionId: request.sessionId,
+        actions: request.actions,
+        clientVersion: CONFIG.CLIENT_VERSION as string,
+        cachedKey,
+        deviceTrackerId: request.deviceTrackerId,
+        stateHash: request.stateHash,
+        metrics: flushMetrics(),
+      }),
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+let autosaveErrors = 0;
+
+export async function autosave(request: Request, retries = 0) {
+  if (!API_URL) return { verified: true };
+
+  try {
+    // Shorten the payload
+    const events = squashEvents(request.actions);
+
+    // Serialize values before sending
+    const actions = serialize(events);
+
+    if (actions.length === 0) {
+      return { verified: true };
+    }
+
+    if (autosaveErrors) {
+      await new Promise((res) => setTimeout(res, autosaveErrors * 5000));
+    }
+
+    // eslint-disable-next-line no-console
+    console.time("getGameHash");
+    const stateHash = await getGameHash(request.state);
+    // eslint-disable-next-line no-console
+    console.timeEnd("getGameHash");
+
+    // Use API2 unless we are retrying, and then fall back to the original API.
+    const apiUrl = retries === 0 ? API2_URL : API_URL;
+
+    const response = await autosaveRequest(
+      {
+        ...request,
+        actions,
+        stateHash,
+      },
+      apiUrl,
+    );
+
+    if (response.status === 503) {
+      const data = await response.json();
+      if (data.message === "Temporary maintenance") {
+        throw new Error(ERRORS.MAINTENANCE);
+      } else {
+        // Throttling. Do exponential backoff with jitter
+        const backoff = Math.min(1000 * Math.pow(2, retries), 10000);
+        const jitter = Math.random() * 1000;
+
+        await new Promise((resolve) => setTimeout(resolve, backoff + jitter));
+
+        if (retries < 3) {
+          return await autosave(request, retries + 1);
+        }
+
+        throw new Error(ERRORS.AUTOSAVE_SERVER_ERROR);
+      }
+    }
+
+    if (response.status === 401) {
+      // The BE tags disabled-login as a 401 with a structured body so we
+      // can route the user to the dedicated GoogleLoginDisabled screen
+      // instead of the generic SessionExpired one.
+      const data = await response.json().catch(() => null);
+      if (data?.errorCode === ERRORS.GOOGLE_LOGIN_DISABLED) {
+        throw new Error(ERRORS.GOOGLE_LOGIN_DISABLED);
+      }
+      throw new Error(ERRORS.SESSION_EXPIRED);
+    }
+
+    if (response.status === 400) {
+      throw new Error(ERRORS.AUTOSAVE_CLOCK_ERROR);
+    }
+
+    if (response.status === 403) {
+      throw new Error(ERRORS.AUTOSAVE_CLIENT_ERROR);
+    }
+
+    if (response.status === 409) {
+      throw new Error(ERRORS.MULTIPLE_DEVICES_OPEN);
+    }
+
+    if (response.status === 429) {
+      throw new Error(ERRORS.TOO_MANY_REQUESTS);
+    }
+
+    if (response.status !== 200 || !response.ok) {
+      autosaveErrors += 1;
+      throw new Error(ERRORS.AUTOSAVE_SERVER_ERROR);
+    }
+
+    autosaveErrors = 0;
+
+    // eslint-disable-next-line prefer-const
+    let { farm, changeset, announcements } = await sanitizeHTTPResponse<{
+      farm: any;
+      changeset: any;
+      announcements: any;
+    }>(response);
+
+    farm.id = request.farmId;
+
+    // Merge the changes over the previous
+    farm = {
+      ...request.state,
+      ...farm,
+    };
+
+    const game = makeGame(farm);
+
+    return { verified: true, farm: game, changeset, announcements };
+  } catch (e) {
+    // First attempt goes to API2 - retry once against the original API
+    // before surfacing the error.
+    if (retries === 0) {
+      return await autosave(request, retries + 1);
+    }
+
+    throw e;
+  }
+}

@@ -1,0 +1,665 @@
+import React, { useRef, useState } from "react";
+import { Box } from "components/ui/Box";
+import { ITEM_DETAILS } from "features/game/types/images";
+import type {
+  GameState,
+  InventoryItemName,
+  TemperateSeasonName,
+} from "features/game/types/game";
+import type { CollectibleName } from "features/game/types/craftables";
+import { getKeys } from "lib/object";
+import {
+  getChestBuds,
+  getChestFarmHands,
+  getChestItems,
+  getChestPets,
+} from "./utils/inventory";
+import {
+  getChestCategories,
+  CHEST_SPECIAL_CATEGORIES,
+  type ChestSpecialCategoryId,
+} from "./utils/chestCategories";
+import type Decimal from "decimal.js-light";
+import { Button } from "components/ui/Button";
+
+import { SplitScreenView } from "components/ui/SplitScreenView";
+import { PIXEL_SCALE } from "features/game/lib/constants";
+import { InventoryItemDetails } from "components/ui/layouts/InventoryItemDetails";
+import { isEmpty } from "lodash";
+
+import type { Bud } from "features/game/types/buds";
+import { BudDetails } from "components/ui/layouts/BudDetails";
+import classNames from "classnames";
+import type { BuildingName } from "features/game/types/buildings";
+import { SUNNYSIDE } from "assets/sunnyside";
+import { Label } from "components/ui/Label";
+import { useAppTranslation } from "lib/i18n/useAppTranslations";
+import {
+  BUSH_VARIANTS,
+  DIRT_PATH_VARIANTS,
+  PET_HOUSE_VARIANTS,
+  TREE_VARIANTS,
+  WATER_WELL_VARIANTS,
+} from "features/island/lib/alternateArt";
+import { InnerPanel } from "components/ui/Panel";
+import {
+  isBuildingUpgradable,
+  makeUpgradableBuildingKey,
+  type UpgradableBuildingType,
+} from "features/game/events/landExpansion/upgradeBuilding";
+import type { LandBiomeName } from "features/island/biomes/biomes";
+import { getCurrentBiome } from "features/island/biomes/biomes";
+import {
+  isPetNFTRevealed,
+  PET_TYPES,
+  type PetNFTs,
+} from "features/game/types/pets";
+import type {
+  LandscapingPlaceable,
+  LandscapingPlaceableType,
+} from "features/game/expansion/placeable/landscapingMachine";
+import { PetNFTDetails } from "components/ui/layouts/PetNFTDetails";
+import { getPetImage } from "features/island/pets/lib/petShared";
+import type { NFTName } from "features/game/events/landExpansion/placeNFT";
+import { useNow } from "lib/utils/hooks/useNow";
+import type { PlaceableLocation } from "features/game/types/collectibles";
+import { NPCPlaceable } from "features/island/bumpkin/components/NPC";
+import { FarmHandDetails } from "components/ui/layouts/FarmHandDetails";
+import { getBudImage } from "lib/buds/types";
+import { InventoryFilters } from "./InventoryFilters";
+import { KNOWN_IDS } from "features/game/types";
+import { useMarketplaceTradeables } from "features/marketplace/lib/useMarketplaceTradeables";
+
+export const ITEM_ICONS: (
+  season: TemperateSeasonName,
+  biome: LandBiomeName,
+  level?: number,
+) => Partial<Record<InventoryItemName, string>> = (season, biome, level) => ({
+  Market: SUNNYSIDE.icons.marketIcon,
+  "Fire Pit": SUNNYSIDE.icons.firePitIcon,
+  Workbench: SUNNYSIDE.icons.workbenchIcon,
+  Kitchen: SUNNYSIDE.icons.kitchenIcon,
+  "Hen House": SUNNYSIDE.icons.henHouseIcon,
+  Bakery: SUNNYSIDE.icons.bakeryIcon,
+  Deli: SUNNYSIDE.icons.deliIcon,
+  "Smoothie Shack": SUNNYSIDE.icons.smoothieIcon,
+  Toolshed: SUNNYSIDE.icons.toolshedIcon,
+  Warehouse: SUNNYSIDE.icons.warehouseIcon,
+  Tree: TREE_VARIANTS(biome, season, "Tree"),
+  "Ancient Tree": TREE_VARIANTS(biome, season, "Ancient Tree"),
+  "Sacred Tree": TREE_VARIANTS(biome, season, "Sacred Tree"),
+  "Dirt Path": DIRT_PATH_VARIANTS[biome],
+  Greenhouse: SUNNYSIDE.icons.greenhouseIcon,
+  Bush: BUSH_VARIANTS[biome][season],
+  "Water Well": WATER_WELL_VARIANTS[season][level ?? 1],
+  "Pet House": PET_HOUSE_VARIANTS[level ?? 1],
+});
+
+interface PanelContentProps {
+  selectedChestItem?: LandscapingPlaceableType;
+  closeModal: () => void;
+  state: GameState;
+  buds: Record<number, Bud>;
+  pets: PetNFTs;
+  onPlace?: (name: LandscapingPlaceable) => void;
+  onPlaceNFT?: (id: string, nft: NFTName) => void;
+  onPlaceFarmHand?: (id: string) => void;
+  onOpenMarketplace?: () => void;
+  isSaving?: boolean;
+}
+
+const PanelContent: React.FC<PanelContentProps> = ({
+  isSaving,
+  onPlace,
+  onPlaceNFT,
+  onPlaceFarmHand,
+  onOpenMarketplace,
+  selectedChestItem,
+  closeModal,
+  state,
+  buds,
+  pets,
+}) => {
+  const { t } = useAppTranslation();
+  const now = useNow();
+
+  // Bumpkin is not placeable from the chest
+  if (!selectedChestItem || selectedChestItem.name === "Bumpkin") return null;
+
+  const handlePlace = () => {
+    if (selectedChestItem.name === "FarmHand") {
+      onPlaceFarmHand?.(selectedChestItem.id);
+    } else if (
+      selectedChestItem.name === "Bud" ||
+      selectedChestItem.name === "Pet"
+    ) {
+      onPlaceNFT?.(selectedChestItem.id, selectedChestItem.name);
+    } else {
+      onPlace?.(selectedChestItem.name);
+    }
+    closeModal();
+  };
+
+  if (selectedChestItem.name === "FarmHand") {
+    const bumpkin = state.farmHands.bumpkins[selectedChestItem.id];
+    const equipped = bumpkin?.equipped;
+
+    return (
+      <FarmHandDetails
+        equipped={equipped}
+        actionView={
+          onPlaceFarmHand && (
+            <Button onClick={handlePlace} disabled={isSaving}>
+              {isSaving ? t("saving") : t("place.map")}
+            </Button>
+          )
+        }
+      />
+    );
+  }
+
+  if (selectedChestItem.name === "Bud") {
+    const budId = Number(selectedChestItem.id);
+    const bud = buds[budId];
+
+    return (
+      <BudDetails
+        bud={bud}
+        budId={budId}
+        actionView={
+          onPlace && (
+            <Button onClick={handlePlace} disabled={isSaving}>
+              {isSaving ? t("saving") : t("place.map")}
+            </Button>
+          )
+        }
+      />
+    );
+  }
+
+  if (selectedChestItem.name === "Pet") {
+    const petId = Number(selectedChestItem.id);
+    const petData = pets[petId];
+    const isRevealed = isPetNFTRevealed(petId, now);
+
+    return (
+      <PetNFTDetails
+        petId={petId}
+        petName={petData.name}
+        actionView={
+          <div className="flex flex-col gap-y-2">
+            {!isRevealed && (
+              <Label type="danger">{t("landscape.petNFT.notHatched")}</Label>
+            )}
+            {onPlace && (
+              <Button onClick={handlePlace} disabled={isSaving || !isRevealed}>
+                {isSaving ? t("saving") : t("place.map")}
+              </Button>
+            )}
+          </div>
+        }
+      />
+    );
+  }
+
+  return (
+    <InventoryItemDetails
+      game={state}
+      details={{
+        item: selectedChestItem.name,
+      }}
+      properties={{
+        onMarketplaceClick: onOpenMarketplace,
+      }}
+      actionView={
+        onPlace && (
+          <Button onClick={handlePlace} disabled={isSaving}>
+            {isSaving ? t("saving") : t("place.map")}
+          </Button>
+        )
+      }
+    />
+  );
+};
+
+interface Props {
+  state: GameState;
+  selected?: LandscapingPlaceableType;
+  onSelect: (item: LandscapingPlaceableType) => void;
+  closeModal: () => void;
+  onPlace?: (name: LandscapingPlaceable) => void;
+  onPlaceNFT?: (id: string, nft: NFTName) => void;
+  onPlaceFarmHand?: (id: string) => void;
+  onDepositClick?: () => void;
+  onOpenMarketplace?: (name: CollectibleName) => void;
+  isSaving?: boolean;
+  location?: PlaceableLocation;
+}
+
+export const Chest: React.FC<Props> = ({
+  state,
+  selected,
+  onSelect,
+  closeModal,
+  isSaving,
+  onPlace,
+  onPlaceNFT,
+  onPlaceFarmHand,
+  onDepositClick,
+  onOpenMarketplace,
+  location,
+}: Props) => {
+  const divRef = useRef<HTMLDivElement>(null);
+  const [search, setSearch] = useState("");
+  const [activeCategories, setActiveCategories] = useState<string[]>([]);
+  const { isTradeable } = useMarketplaceTradeables();
+
+  const toggleCategory = (id: string) =>
+    setActiveCategories((prev) =>
+      prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id],
+    );
+  // For petHouse, only show buds and petNFTs (no regular buds for petHouse)
+  const buds = location === "petHouse" ? {} : getChestBuds(state);
+  const petsNFTs = getChestPets(state.pets?.nfts ?? {});
+  const farmHands =
+    location === "petHouse" ? {} : getChestFarmHands(state.farmHands);
+
+  const chestMap = getChestItems(state);
+  const { t } = useAppTranslation();
+
+  // For petHouse, only show pet collectibles
+  const collectibles = getKeys(chestMap)
+    .filter((item) => chestMap[item]?.gt(0))
+    .filter((item) => (location === "petHouse" ? item in PET_TYPES : true))
+    .sort((a, b) => a.localeCompare(b))
+    .reduce(
+      (acc, item) => {
+        return { ...acc, [item]: chestMap[item] };
+      },
+      {} as Record<CollectibleName, Decimal>,
+    );
+
+  const getSelectedChestItems = (): LandscapingPlaceableType | undefined => {
+    const firstBudId = getKeys(buds)[0];
+    const firstPetId = getKeys(petsNFTs)[0];
+    const firstCollectible = getKeys(collectibles)[0];
+    const firstFarmHandId = getKeys(farmHands)[0];
+
+    const firstBud =
+      firstBudId !== undefined
+        ? { name: "Bud" as const, id: String(firstBudId) }
+        : undefined;
+    const firstPet =
+      firstPetId !== undefined
+        ? { name: "Pet" as const, id: String(firstPetId) }
+        : undefined;
+    const firstCollectibleItem = firstCollectible
+      ? { name: firstCollectible }
+      : undefined;
+    const firstFarmHand =
+      firstFarmHandId !== undefined
+        ? { name: "FarmHand" as const, id: String(firstFarmHandId) }
+        : undefined;
+    const fallback =
+      firstCollectibleItem ?? firstBud ?? firstPet ?? firstFarmHand;
+
+    if (selected?.name === "Bud") {
+      if (buds[Number(selected.id)]) return selected;
+      return firstBud ?? fallback;
+    }
+    if (selected?.name === "Pet") {
+      if (petsNFTs[Number(selected.id)]) return selected;
+      return firstPet ?? fallback;
+    }
+    if (selected?.name === "FarmHand") {
+      if (farmHands[selected.id]) return selected;
+      return firstFarmHand ?? fallback;
+    }
+    if (selected?.name && collectibles[selected.name as CollectibleName]) {
+      return selected;
+    }
+    return fallback;
+  };
+
+  const selectedChestItem = getSelectedChestItems();
+
+  const selectedCollectible =
+    selectedChestItem && collectibles[selectedChestItem.name as CollectibleName]
+      ? (selectedChestItem.name as CollectibleName)
+      : undefined;
+  const openMarketplace =
+    onOpenMarketplace &&
+    selectedCollectible &&
+    isTradeable({
+      collection: "collectibles",
+      id: KNOWN_IDS[selectedCollectible],
+    })
+      ? () => onOpenMarketplace(selectedCollectible)
+      : undefined;
+
+  const handleItemClick = (item: LandscapingPlaceableType) => {
+    onSelect(item);
+  };
+
+  const chestIsEmpty =
+    getKeys(collectibles).length === 0 &&
+    Object.values(buds).length === 0 &&
+    Object.values(petsNFTs).length === 0 &&
+    Object.values(farmHands).length === 0;
+
+  if (chestIsEmpty) {
+    return (
+      <InnerPanel className="flex flex-col justify-evenly items-center px-2 !py-[50px]">
+        <img
+          src={SUNNYSIDE.npcs.synced}
+          alt="Empty Chest"
+          style={{
+            width: `${PIXEL_SCALE * 17}px`,
+          }}
+        />
+        <span className="text-xs text-center mt-2">
+          {t("statements.empty.chest")}
+        </span>
+        {onDepositClick && (
+          <p
+            className="underline text-xxs text-center mt-2 cursor-pointer"
+            onClick={() => {
+              onDepositClick();
+              closeModal();
+            }}
+          >
+            {t("statements.wallet.to.inventory.transfer")}
+          </p>
+        )}
+      </InnerPanel>
+    );
+  }
+
+  const collectibleNames = getKeys(collectibles);
+
+  const ITEM_GROUPS = getChestCategories(state, collectibleNames);
+
+  const query = search.trim().toLowerCase();
+  const matchesSearch = (item: CollectibleName) =>
+    !query || item.toLowerCase().includes(query);
+
+  const hasBuds = Object.values(buds).length > 0;
+  const hasPetNFTs = !isEmpty(petsNFTs);
+  const hasFarmHands = !isEmpty(farmHands) && !!onPlaceFarmHand;
+
+  const specialAvailable: Record<ChestSpecialCategoryId, boolean> = {
+    buds: hasBuds,
+    petNFTs: hasPetNFTs,
+    farmHands: hasFarmHands,
+  };
+
+  const filterCategories: { id: string; label: string; icon: string }[] = [];
+  CHEST_SPECIAL_CATEGORIES.filter(
+    (category) => specialAvailable[category.id],
+  ).forEach((category) =>
+    filterCategories.push({
+      id: category.id,
+      label: t(category.id),
+      icon: category.icon,
+    }),
+  );
+  ITEM_GROUPS.filter((group) => group.items.length > 0).forEach((group) =>
+    filterCategories.push({
+      id: group.id,
+      label: t(group.id),
+      icon: group.icon,
+    }),
+  );
+
+  const visibleGroups = ITEM_GROUPS.filter((group) => group.items.length > 0)
+    .filter(
+      (group) =>
+        activeCategories.length === 0 || activeCategories.includes(group.id),
+    )
+    .map((group) => ({
+      ...group,
+      items: group.items.filter(matchesSearch),
+    }))
+    .filter((group) => group.items.length > 0);
+
+  // Buds, Pet NFTs and Farm Hands have no searchable name, so they are hidden
+  // while a search query is active.
+  const inCategory = (id: string) =>
+    query === "" &&
+    (activeCategories.length === 0 || activeCategories.includes(id));
+  const showBuds = hasBuds && inCategory("buds");
+  const showPetNFTs = hasPetNFTs && inCategory("petNFTs");
+  const showFarmHands = hasFarmHands && inCategory("farmHands");
+
+  const nothingToShow =
+    !showBuds && !showPetNFTs && !showFarmHands && visibleGroups.length === 0;
+
+  return (
+    <>
+      <InventoryFilters
+        search={search}
+        onSearchChange={setSearch}
+        categories={filterCategories}
+        activeCategories={activeCategories}
+        onToggleCategory={toggleCategory}
+        onClearCategories={() => setActiveCategories([])}
+      />
+      <SplitScreenView
+        divRef={divRef}
+        tallMobileContent={true}
+        wideModal={true}
+        showPanel={!!selectedChestItem}
+        panel={
+          <PanelContent
+            state={state}
+            selectedChestItem={selectedChestItem}
+            closeModal={closeModal}
+            onPlace={onPlace}
+            onPlaceNFT={onPlaceNFT}
+            onPlaceFarmHand={onPlaceFarmHand}
+            onOpenMarketplace={openMarketplace}
+            isSaving={isSaving}
+            buds={buds}
+            pets={petsNFTs}
+          />
+        }
+        content={
+          <>
+            {showBuds && (
+              <div className="flex flex-col pl-2 mb-2 w-full" key="Buds">
+                <Label
+                  type="default"
+                  className="my-1"
+                  icon={SUNNYSIDE.icons.heart}
+                >
+                  {t("buds")}
+                </Label>
+                <div className="flex mb-2 flex-wrap -ml-1.5">
+                  {getKeys(buds).map((budId) => {
+                    const type = buds[budId].type;
+
+                    return (
+                      <Box
+                        isSelected={
+                          selectedChestItem?.name === "Bud" &&
+                          selectedChestItem?.id === String(budId)
+                        }
+                        key={`Bud-${budId}`}
+                        onClick={() =>
+                          handleItemClick({ name: "Bud", id: String(budId) })
+                        }
+                        image={getBudImage(budId)}
+                        iconClassName={classNames(
+                          "scale-[1.8] origin-bottom absolute",
+                          {
+                            "top-1": type === "Retreat",
+
+                            "left-1": type === "Plaza",
+                          },
+                        )}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+            {showPetNFTs && (
+              <div className="flex flex-col pl-2 mb-2 w-full" key="PetNFTs">
+                <Label
+                  type="default"
+                  className="my-1"
+                  icon={SUNNYSIDE.icons.heart}
+                >
+                  {t("petNFTs")}
+                </Label>
+                <div className="flex mb-2 flex-wrap -ml-1.5">
+                  {getKeys(petsNFTs).map((petId) => {
+                    const petImage = getPetImage("happy", Number(petId));
+                    return (
+                      <Box
+                        isSelected={
+                          selectedChestItem?.name === "Pet" &&
+                          selectedChestItem?.id === String(petId)
+                        }
+                        key={`Pet #${petId}`}
+                        onClick={() =>
+                          handleItemClick({ name: "Pet", id: String(petId) })
+                        }
+                        image={petImage}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+            {showFarmHands && (
+              <div className="flex flex-col pl-2 mb-2 w-full" key="FarmHands">
+                <Label
+                  type="default"
+                  className="my-1"
+                  icon={SUNNYSIDE.achievement.farmHand}
+                >
+                  {t("farmHands")}
+                </Label>
+                <div className="flex mb-2 flex-wrap -ml-1.5">
+                  {Object.keys(farmHands).map((id) => (
+                    <Box
+                      key={`FarmHand-${id}`}
+                      isSelected={
+                        selectedChestItem?.name === "FarmHand" &&
+                        selectedChestItem?.id === id
+                      }
+                      onClick={() => {
+                        handleItemClick({ name: "FarmHand", id });
+                      }}
+                      image={SUNNYSIDE.achievement.farmHand}
+                    >
+                      <NPCPlaceable
+                        parts={farmHands[id].equipped}
+                        width={PIXEL_SCALE * 12}
+                      />
+                    </Box>
+                  ))}
+                </div>
+              </div>
+            )}
+            {visibleGroups.map(({ items, id, icon }) => (
+              <ItemGroup
+                key={id}
+                items={items}
+                label={t(id)}
+                icon={icon}
+                chestMap={chestMap}
+                selectedChestItem={selectedChestItem}
+                onItemClick={handleItemClick}
+                state={state}
+                divRef={divRef}
+              />
+            ))}
+            {nothingToShow && (
+              <div className="flex flex-col justify-center items-center w-full p-4">
+                <img
+                  src={SUNNYSIDE.icons.search}
+                  alt=""
+                  style={{ width: `${PIXEL_SCALE * 10}px` }}
+                />
+                <span className="text-xs text-center mt-2">
+                  {t("inventory.noResults")}
+                </span>
+              </div>
+            )}
+            {onDepositClick && (
+              <div className="flex w-full ml-1 my-1">
+                <p
+                  className="underline text-xxs cursor-pointer"
+                  onClick={() => {
+                    onDepositClick();
+                    closeModal();
+                  }}
+                >
+                  {t("statements.wallet.to.inventory.transfer")}
+                </p>
+              </div>
+            )}
+          </>
+        }
+      />
+    </>
+  );
+};
+
+interface ItemGroupProps {
+  items: CollectibleName[];
+  label: string;
+  icon: string;
+  chestMap: Record<string, Decimal>;
+  selectedChestItem?: LandscapingPlaceableType;
+  onItemClick: (item: LandscapingPlaceableType) => void;
+  state: GameState;
+  divRef: React.RefObject<HTMLDivElement | null>;
+}
+
+const ItemGroup: React.FC<ItemGroupProps> = ({
+  items,
+  label,
+  icon,
+  chestMap,
+  selectedChestItem,
+  onItemClick,
+  state,
+  divRef,
+}) => {
+  if (items.length === 0 || !selectedChestItem) return null;
+
+  const biome = getCurrentBiome(state.island);
+
+  return (
+    <div className="flex flex-col pl-2 mb-2 w-full">
+      <Label type="default" className="my-1" icon={icon}>
+        {label}
+      </Label>
+      <div className="flex mb-2 flex-wrap -ml-1.5">
+        {items.map((item) => {
+          const hasLevel = isBuildingUpgradable(item as BuildingName)
+            ? state[makeUpgradableBuildingKey(item as UpgradableBuildingType)]
+                .level
+            : undefined;
+
+          const image =
+            ITEM_ICONS(state.season.season, biome, hasLevel)[item] ??
+            ITEM_DETAILS[item].image;
+          return (
+            <Box
+              count={chestMap[item]}
+              isSelected={selectedChestItem?.name === item}
+              key={item}
+              onClick={() => onItemClick({ name: item })}
+              image={image}
+              parentDivRef={divRef}
+            />
+          );
+        })}
+      </div>
+    </div>
+  );
+};

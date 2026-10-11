@@ -1,0 +1,784 @@
+import React, { useContext, useLayoutEffect, useMemo, useState } from "react";
+import { Label } from "components/ui/Label";
+import { SUNNYSIDE } from "assets/sunnyside";
+import { secondsToString } from "lib/utils/time";
+import { useAppTranslation } from "lib/i18n/useAppTranslations";
+import { getWeekKey, weekResetsAt } from "features/game/lib/factions";
+import { CloseButtonPanel } from "features/game/components/CloseablePanel";
+import { NPC_WEARABLES } from "lib/npcs";
+import classNames from "classnames";
+import { Context } from "features/game/GameProvider";
+import { useSelector } from "@xstate/react";
+import type {
+  BountyRequest,
+  InventoryItemName,
+} from "features/game/types/game";
+import { getObjectEntries, getKeys } from "lib/object";
+import { pixelDarkBorderStyle } from "features/game/lib/style";
+import { SquareIcon } from "components/ui/SquareIcon";
+import {
+  getChapterArtefact,
+  getChapterTicket,
+  getCurrentChapter,
+} from "features/game/types/chapters";
+import { PIXEL_SCALE } from "features/game/lib/constants";
+import { ITEM_DETAILS } from "features/game/types/images";
+import { ModalOverlay } from "components/ui/ModalOverlay";
+import { InnerPanel, OuterPanel } from "components/ui/Panel";
+import { RequirementLabel } from "components/ui/RequirementsLabel";
+import { Decimal } from "decimal.js-light";
+import {
+  BOUNTY_CATEGORIES,
+  canSellBounty,
+  generateBountyTicket,
+} from "features/game/events/landExpansion/sellBounty";
+import { Button } from "components/ui/Button";
+import confetti from "canvas-confetti";
+import flowerIcon from "assets/icons/flower_token.webp";
+import chapterPoints from "assets/icons/red_medal_short.webp";
+import {
+  getBountyBonusAmount,
+  isBountyBonusClaimed,
+  NO_BONUS_BOUNTIES_WEEK,
+} from "features/game/events/landExpansion/claimBountyBonus";
+import { getCountAndType } from "features/island/hud/components/inventory/utils/inventory";
+import { useCountdown } from "lib/utils/hooks/useCountdown";
+import { useNow } from "lib/utils/hooks/useNow";
+import { getChapterTaskPoints } from "features/game/types/tracks";
+import { ANIMALS } from "features/game/types/animals";
+
+export const MegaBountyBoard: React.FC<{ onClose: () => void }> = ({
+  onClose,
+}) => (
+  <CloseButtonPanel
+    bumpkinParts={NPC_WEARABLES.poppy}
+    onClose={onClose}
+    container={OuterPanel}
+    tabs={[
+      {
+        icon: SUNNYSIDE.icons.stopwatch,
+        name: "Mega Bounty Board",
+        id: "board",
+      },
+    ]}
+  >
+    <MegaBountyBoardContent />
+  </CloseButtonPanel>
+);
+
+// Module-scope so it's a stable reference (used by both the autoSelection
+// memo and canAddBountyToSelection).
+const getRequiredCount = (bounty: BountyRequest) =>
+  BOUNTY_CATEGORIES["Mark Bounties"](bounty) ? bounty.quantity : 1;
+
+export const BountyBonusPanel: React.FC<{
+  chapterTicket: InventoryItemName;
+  amount: number;
+  completedCount: number;
+  totalCount: number;
+  bonusClaimed: boolean;
+  onClaim: () => void;
+}> = ({
+  chapterTicket,
+  amount,
+  completedCount,
+  totalCount,
+  bonusClaimed,
+  onClaim,
+}) => {
+  const { t } = useAppTranslation();
+  const isAllBountiesCompleted =
+    totalCount > 0 && completedCount === totalCount;
+
+  return (
+    <InnerPanel className="flex flex-col justify-center gap-2 mb-1">
+      <div className="flex items-center gap-2 justify-between">
+        <Label
+          type="default"
+          className="ml-1"
+          icon={ITEM_DETAILS[chapterTicket].image}
+        >
+          {t("bounties.bonus.title")}
+        </Label>
+        {bonusClaimed ? (
+          <Label
+            type="success"
+            className="ml-1"
+            secondaryIcon={SUNNYSIDE.icons.confirm}
+          >
+            {t("bounties.bonus.allCompleted")}
+          </Label>
+        ) : isAllBountiesCompleted ? (
+          <Label type="vibrant" className="ml-1">
+            {t("bounties.bonus.ready")}
+          </Label>
+        ) : (
+          <Label type="default" className="ml-1">
+            {t("bounties.bonus.progress", {
+              completed: completedCount,
+              total: totalCount,
+            })}
+          </Label>
+        )}
+      </div>
+      <p className="text-xs ml-1">
+        {bonusClaimed
+          ? t("bounties.bonus.claimedDescription", {
+              amount,
+              chapterTicket,
+            })
+          : t("bounties.bonus.getBonus", {
+              amount,
+              chapterTicket,
+            })}
+      </p>
+      <Button
+        onClick={onClaim}
+        disabled={bonusClaimed || !isAllBountiesCompleted}
+      >
+        {bonusClaimed
+          ? t("bounties.bonus.claimed")
+          : isAllBountiesCompleted
+            ? t("bounties.bonus.claimAmount", {
+                amount,
+                chapterTicket,
+              })
+            : t("bounties.bonus.completeAll")}
+      </Button>
+    </InnerPanel>
+  );
+};
+
+export const MegaBountyBoardContent: React.FC<{ readonly?: boolean }> = ({
+  readonly,
+}) => {
+  const { t } = useAppTranslation();
+  const { gameService, showAnimations } = useContext(Context);
+  const now = useNow({ live: true });
+
+  const [selectedBounty, setSelectedBounty] = useState<BountyRequest>();
+  const [isBulkSell, setIsBulkSell] = useState(false);
+  const [selectedSells, setSelectedSells] = useState<string[]>([]);
+
+  const state = useSelector(gameService, (state) => state.context.state);
+  const exchange = useSelector(
+    gameService,
+    (state) => state.context.state.bounties,
+  );
+  const bonusClaimed = isBountyBonusClaimed({
+    bounties: exchange,
+    now,
+  });
+
+  const endTime = weekResetsAt();
+  const { totalSeconds: secondsRemaining } = useCountdown(endTime);
+  const showDanger = secondsRemaining < 60 * 60 * 24;
+
+  const getBountiesByCategory = () => {
+    const result: Record<
+      string,
+      { categoryName: string; bounties: BountyRequest[] }
+    > = {};
+
+    Object.entries(BOUNTY_CATEGORIES).forEach(([category, checkFn]) => {
+      result[category] = {
+        categoryName: category,
+        bounties: exchange.requests.filter(checkFn),
+      };
+    });
+
+    return result;
+  };
+  const bountiesByCategory = getBountiesByCategory();
+  // Memoised so it's a stable reference dependency for the autoSelection memo
+  // — otherwise we'd re-derive it on every render and defeat the memo below.
+  const allBounties = useMemo(
+    () =>
+      exchange.requests.filter(
+        (bounty) => !Object.keys(ANIMALS).includes(bounty.name),
+      ),
+    [exchange.requests],
+  );
+
+  const getCurrencyInfo = (bounty: BountyRequest) => {
+    // First check if this is an Obsidian bounty that rewards FLOWER tokens
+    if (
+      BOUNTY_CATEGORIES["Obsidian Bounties"](bounty) &&
+      bounty.sfl &&
+      bounty.sfl > 0
+    ) {
+      return {
+        amount: bounty.sfl,
+        icon: flowerIcon,
+      };
+    }
+
+    // Otherwise handle item rewards
+    const items = bounty.items ?? {};
+    const chapterTicket = getChapterTicket(now);
+    const seasonalArtefact = getChapterArtefact(now);
+
+    // Calculate bounty tickets if needed
+    const bountyTickets = generateBountyTicket({
+      game: state,
+      bounty,
+    });
+
+    // Determine which reward currency to show, prioritizing seasonal items
+    // First check seasonal ticket, then seasonal artefact, then fallback to first item
+    let currency: InventoryItemName;
+    if ((items[chapterTicket] ?? 0) > 0) {
+      currency = chapterTicket;
+    } else if ((items[seasonalArtefact] ?? 0) > 0) {
+      currency = seasonalArtefact;
+    } else {
+      currency = getKeys(items)[0];
+    }
+
+    // Return amount (using bountyTickets for seasonal tickets) and icon
+    return {
+      amount:
+        currency === chapterTicket ? bountyTickets : (items[currency] ?? 0),
+      icon: ITEM_DETAILS[currency]?.image ?? "",
+    };
+  };
+
+  const completedBountiesCount = allBounties.filter((bounty) =>
+    exchange.completed.some((completed) => completed.id === bounty.id),
+  ).length;
+
+  const noBonusBountiesWeek = NO_BONUS_BOUNTIES_WEEK.includes(
+    getWeekKey({ date: new Date(now) }),
+  );
+  const chapterTicket = getChapterTicket(now);
+  const bountyBonusAmount = getBountyBonusAmount(now);
+
+  const handleBonusClaim = () => {
+    const currentBounties = gameService.getSnapshot().context.state.bounties;
+
+    if (
+      isBountyBonusClaimed({
+        bounties: currentBounties,
+        now: Date.now(),
+      })
+    ) {
+      return;
+    }
+
+    gameService.send("claim.bountyBoardBonus");
+    if (showAnimations) confetti();
+  };
+
+  // Self-contained memo: declares its helpers inside so the dependency list
+  // can be exhaustive (`allBounties`, `exchange.completed`, `state`) — no
+  // exhaustive-deps suppression, friendly to the React Compiler.
+  const autoSelection = useMemo(() => {
+    // Rough reward weight so the greedy auto-selector picks the most
+    // valuable bounty first when several share a finite inventory pool
+    // (e.g. two Mark bounties competing for the same Marks).
+    const getRewardScoreFor = (bounty: BountyRequest) => {
+      const tickets = generateBountyTicket({ game: state, bounty });
+      const coins = bounty.coins ?? 0;
+      const sfl = BOUNTY_CATEGORIES["Obsidian Bounties"](bounty)
+        ? (bounty.sfl ?? 0)
+        : 0;
+      return tickets * 50 + coins + sfl * 100;
+    };
+
+    const allocation: Partial<Record<InventoryItemName, number>> = {};
+    const selected: string[] = [];
+
+    const ranked = [...allBounties].sort(
+      (a, b) => getRewardScoreFor(b) - getRewardScoreFor(a),
+    );
+
+    ranked.forEach((bounty) => {
+      const isSold = exchange.completed.some((c) => c.id === bounty.id);
+      if (isSold) return;
+
+      const { count } = getCountAndType(state, bounty.name);
+      const required = getRequiredCount(bounty);
+      const used = allocation[bounty.name] ?? 0;
+
+      if (count.gte(used + required)) {
+        selected.push(bounty.id);
+        allocation[bounty.name] = used + required;
+      }
+    });
+
+    return selected;
+  }, [allBounties, exchange.completed, state]);
+  const canBulkSellAnything = autoSelection.length > 0;
+
+  const handleBulkSell = () => {
+    if (!isBulkSell) {
+      setIsBulkSell(true);
+      setSelectedSells(autoSelection);
+    } else {
+      handleConfirmBulkSell();
+    }
+  };
+
+  const handleConfirmBulkSell = () => {
+    // Drop selections that have gone stale (inventory consumed elsewhere,
+    // already completed in another tab) and walk them in order so we don't
+    // ship an over-allocated payload when several selected bounties share
+    // the same item pool (e.g. two Mark bounties on a depleted Mark stash).
+    const allocation: Partial<Record<InventoryItemName, number>> = {};
+    const validSells = selectedSells.filter((id) => {
+      const bounty = exchange.requests.find((r) => r.id === id);
+      if (!bounty || !canSellBounty(state, id)) return false;
+      const { count } = getCountAndType(state, bounty.name);
+      const required = getRequiredCount(bounty);
+      const used = allocation[bounty.name] ?? 0;
+      if (!count.gte(used + required)) return false;
+      allocation[bounty.name] = used + required;
+      return true;
+    });
+
+    if (validSells.length === 0) {
+      setSelectedSells([]);
+      setIsBulkSell(false);
+      return;
+    }
+
+    gameService.send("bounty.bulkSold", {
+      requestIds: validSells,
+    });
+    if (showAnimations) confetti();
+    setSelectedSells([]);
+    setIsBulkSell(false);
+  };
+
+  const handleCancelBulkSell = () => {
+    setSelectedSells([]);
+    setIsBulkSell(false);
+  };
+
+  // Whether `bounty` can be added on top of `current` without exceeding
+  // available inventory (the shared pool matters for same-name bounties like
+  // multiple Marks).
+  const canAddBountyToSelection = (
+    bounty: BountyRequest,
+    current: string[],
+  ): boolean => {
+    const { count } = getCountAndType(state, bounty.name);
+    const required = getRequiredCount(bounty);
+    const usedByOthers = current.reduce((sum, id) => {
+      if (id === bounty.id) return sum;
+      const b = exchange.requests.find((r) => r.id === id);
+      if (b && b.name === bounty.name) {
+        return sum + getRequiredCount(b);
+      }
+      return sum;
+    }, 0);
+    return count.gte(usedByOthers + required);
+  };
+
+  const toggleSellSelection = (bounty: BountyRequest) => {
+    setSelectedSells((current) => {
+      if (current.includes(bounty.id)) {
+        return current.filter((id) => id !== bounty.id);
+      }
+
+      if (!canAddBountyToSelection(bounty, current)) return current;
+      return [...current, bounty.id];
+    });
+  };
+
+  return (
+    <>
+      {selectedBounty && (
+        <ModalOverlay
+          show={!!selectedBounty}
+          onBackdropClick={() => setSelectedBounty(undefined)}
+        >
+          <Deal
+            bounty={selectedBounty}
+            onClose={() => setSelectedBounty(undefined)}
+            onSold={() => setSelectedBounty(undefined)}
+            isSold={
+              !!exchange.completed.find(
+                (request) => request.id === selectedBounty.id,
+              )
+            }
+            readonly={readonly}
+            now={now}
+          />
+        </ModalOverlay>
+      )}
+      <InnerPanel className="flex flex-col gap-2 mb-1">
+        <div className="flex justify-between px-2 flex-wrap">
+          <Label type="default" className="mb-1">
+            {"Poppy"}
+          </Label>
+          <Label
+            icon={SUNNYSIDE.icons.stopwatch}
+            type={showDanger ? "danger" : "info"}
+            className="mb-1"
+          >
+            {t("megaStore.timeRemaining", {
+              timeRemaining: secondsToString(secondsRemaining, {
+                length: "medium",
+                removeTrailingZeros: true,
+              }),
+            })}
+          </Label>
+        </div>
+
+        <div
+          className={classNames("flex flex-col p-2 pt-1", {
+            ["max-h-[450px] overflow-y-auto scrollable"]: !readonly,
+          })}
+        >
+          <span className="text-xs pb-1">
+            {readonly
+              ? t("megaBountyBoard.message")
+              : t("megaBountyBoard.msg1")}
+          </span>
+
+          <div className="flex flex-col gap-4">
+            {Object.values(bountiesByCategory).every(
+              ({ bounties }) => bounties.length === 0,
+            ) ? (
+              <p className="text-sm">{t("bounties.board.empty")}</p>
+            ) : (
+              getObjectEntries(bountiesByCategory).map(
+                ([category, { categoryName, bounties }], index) => {
+                  if (bounties.length === 0) return null;
+                  return (
+                    <div key={`${category}-${index}-bounty-board`}>
+                      <Label type="default" className="mb-2">
+                        {categoryName}
+                      </Label>
+                      <div className="flex gap-2 flex-wrap">
+                        {bounties.map((bounty) => {
+                          const { amount, icon } = getCurrencyInfo(bounty);
+                          const isSold = !!exchange.completed.find(
+                            (request) => request.id === bounty.id,
+                          );
+                          const isSelected = selectedSells.includes(bounty.id);
+                          // In bulk mode, a card is "unavailable" when the
+                          // player can't currently add it to the selection —
+                          // either it's already sold, or they don't have
+                          // inventory left after accounting for other selected
+                          // same-item bounties. Surface that visually so the
+                          // click doesn't appear to silently fail.
+                          const isUnavailableInBulk =
+                            isBulkSell &&
+                            !isSelected &&
+                            (isSold ||
+                              !canAddBountyToSelection(bounty, selectedSells));
+                          return (
+                            <div
+                              key={`${bounty.name}-${bounty.id}-bounty-card`}
+                              className="flex flex-col space-y-1"
+                            >
+                              <div
+                                className={classNames("relative", {
+                                  "cursor-pointer": !isUnavailableInBulk,
+                                  "cursor-not-allowed": isUnavailableInBulk,
+                                  "bg-brown-600":
+                                    isSold || !isBulkSell || !isSelected,
+                                  "bg-brown-100":
+                                    !isSold && isBulkSell && isSelected,
+                                  "opacity-50":
+                                    isBulkSell && !isSelected && !isSold,
+                                  grayscale: isBulkSell && isUnavailableInBulk,
+                                })}
+                                style={pixelDarkBorderStyle}
+                                onClick={() => {
+                                  if (isBulkSell) {
+                                    if (isUnavailableInBulk) return;
+                                    toggleSellSelection(bounty);
+                                  } else {
+                                    setSelectedBounty(bounty);
+                                  }
+                                }}
+                              >
+                                <div className="flex justify-center items-center w-full h-full z-20">
+                                  <SquareIcon
+                                    icon={
+                                      ITEM_DETAILS[bounty.name]?.image ?? ""
+                                    }
+                                    width={20}
+                                  />
+                                  {isSold && (
+                                    <img
+                                      src={SUNNYSIDE.icons.confirm}
+                                      className="absolute -right-2 -top-3"
+                                      style={{
+                                        width: `${PIXEL_SCALE * 9}px`,
+                                      }}
+                                      alt="Completed"
+                                    />
+                                  )}
+                                  {!isSold &&
+                                    isBulkSell &&
+                                    selectedSells.includes(bounty.id) && (
+                                      <img
+                                        src={SUNNYSIDE.icons.basket}
+                                        className="absolute -right-2 -top-3"
+                                        style={{
+                                          width: `${PIXEL_SCALE * 9}px`,
+                                        }}
+                                        alt="Selected"
+                                      />
+                                    )}
+                                  <div className="absolute px-4 bottom-3 -left-4 object-contain">
+                                    <Label
+                                      icon={icon}
+                                      type="warning"
+                                      className="text-xxs absolute center text-center p-1"
+                                      style={{
+                                        width: `calc(100% + ${PIXEL_SCALE * 10}px)`,
+                                        height: "24px",
+                                      }}
+                                    >
+                                      {amount}
+                                    </Label>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                },
+              )
+            )}
+          </div>
+        </div>
+        {!readonly && allBounties.length > 0 && (
+          <>
+            {isBulkSell && (
+              <div className="flex items-center gap-1 px-1 pb-1">
+                <Label type="vibrant">{t("bounties.bulkSellMode")}</Label>
+                <Label type="warning">
+                  {t("bounties.sellSelected", {
+                    count: selectedSells.length,
+                  })}
+                </Label>
+              </div>
+            )}
+            <div className="flex flex-row gap-1 w-full">
+              {isBulkSell && (
+                <Button
+                  className="flex-1 min-w-0"
+                  onClick={handleCancelBulkSell}
+                >
+                  {t("cancel")}
+                </Button>
+              )}
+              <Button
+                className="flex-1 min-w-0"
+                disabled={
+                  (!isBulkSell && !canBulkSellAnything) ||
+                  (isBulkSell && selectedSells.length === 0)
+                }
+                onClick={handleBulkSell}
+              >
+                {isBulkSell
+                  ? t("bounties.confirmSell")
+                  : t("bounties.bulkSell")}
+              </Button>
+            </div>
+          </>
+        )}
+      </InnerPanel>
+      {!noBonusBountiesWeek && !readonly && allBounties.length > 0 && (
+        <BountyBonusPanel
+          chapterTicket={chapterTicket}
+          amount={bountyBonusAmount}
+          completedCount={completedBountiesCount}
+          totalCount={allBounties.length}
+          bonusClaimed={bonusClaimed}
+          onClaim={handleBonusClaim}
+        />
+      )}
+    </>
+  );
+};
+
+const Deal: React.FC<{
+  bounty: BountyRequest;
+  onClose: () => void;
+  onSold: () => void;
+  isSold: boolean;
+  readonly?: boolean;
+  now: number;
+}> = ({ bounty, onClose, onSold, isSold, readonly, now }) => {
+  const [imageWidth, setImageWidth] = useState(0);
+  const [confirmExchange, setConfirmExchange] = useState(false);
+  const { t } = useAppTranslation();
+  const { gameService, showAnimations } = useContext(Context);
+  const state = useSelector(gameService, (state) => state.context.state);
+  const buttonHandler = () => {
+    if (!confirmExchange) {
+      setConfirmExchange(true);
+      return;
+    }
+
+    sell();
+  };
+
+  const { count: itemBalance } = getCountAndType(state, bounty.name);
+
+  const canSell = () => {
+    if (BOUNTY_CATEGORIES["Mark Bounties"](bounty)) {
+      return itemBalance.gte(bounty.quantity);
+    }
+
+    if (isSold) {
+      return false;
+    }
+
+    return itemBalance.gte(1);
+  };
+
+  const sell = () => {
+    gameService.send("bounty.sold", {
+      requestId: bounty.id,
+    });
+    if (showAnimations) confetti();
+    setConfirmExchange(false);
+
+    onSold();
+  };
+
+  useLayoutEffect(() => {
+    const imgElement = new Image();
+
+    imgElement.onload = function () {
+      const trueWidth = imgElement.width;
+      const scaledWidth = trueWidth * PIXEL_SCALE;
+
+      setImageWidth(scaledWidth);
+    };
+
+    imgElement.src = ITEM_DETAILS[bounty.name].image;
+  }, []);
+
+  const chapter = getCurrentChapter(now);
+  const tickets = generateBountyTicket({
+    game: state,
+    bounty,
+  });
+
+  return (
+    <InnerPanel className="shadow">
+      <>
+        <div className="flex flex-col items-center space-y-2">
+          <div className="flex items-center w-full">
+            <div style={{ width: `${PIXEL_SCALE * 9}px` }} />
+            <span className="flex-1 text-center">{bounty.name}</span>
+            <img
+              src={SUNNYSIDE.icons.close}
+              className="cursor-pointer"
+              onClick={onClose}
+              style={{
+                width: `${PIXEL_SCALE * 9}px`,
+              }}
+            />
+          </div>
+
+          <div className="w-full p-2 px-1">
+            <div className="flex">
+              <div
+                className="w-[40%] relative min-w-[40%] rounded-md overflow-hidden shadow-md mr-2 flex justify-center items-center h-32"
+                style={{
+                  backgroundImage: `url(${SUNNYSIDE.ui.grey_background})`,
+                  backgroundSize: "cover",
+                  backgroundPosition: "center",
+                }}
+              >
+                <img
+                  src={ITEM_DETAILS[bounty.name].image}
+                  alt={bounty.name}
+                  className={"w-full"}
+                  style={{
+                    width: `${imageWidth}px`,
+                  }}
+                />
+              </div>
+              <div className="flex flex-col space-y-2 justify-around">
+                <span className="text-xs leading-none">
+                  {ITEM_DETAILS[bounty.name].description}
+                </span>
+                <div className="flex flex-1 content-start flex-col flex-wrap">
+                  <RequirementLabel
+                    type="item"
+                    item={bounty.name}
+                    balance={itemBalance}
+                    requirement={
+                      BOUNTY_CATEGORIES["Mark Bounties"](bounty)
+                        ? new Decimal(bounty.quantity)
+                        : new Decimal(1)
+                    }
+                  />
+                </div>
+                {getKeys(bounty.items ?? {}).map((name) => {
+                  return (
+                    <Label
+                      key={`${name}-${bounty.id}-reward-label`}
+                      type={isSold ? "success" : "warning"}
+                      icon={ITEM_DETAILS[name].image}
+                      secondaryIcon={
+                        isSold ? SUNNYSIDE.icons.confirm : undefined
+                      }
+                    >
+                      {`Reward: ${
+                        name !== getChapterTicket(now)
+                          ? bounty.items?.[name]
+                          : generateBountyTicket({
+                              game: state,
+                              bounty,
+                            })
+                      } ${name}s`}
+                    </Label>
+                  );
+                })}
+                {!!tickets && (
+                  <Label type={"vibrant"} icon={chapterPoints}>
+                    {`+${getChapterTaskPoints({ task: "bounty", points: tickets })} ${chapter} points.`}
+                  </Label>
+                )}
+                {BOUNTY_CATEGORIES["Obsidian Bounties"](bounty) &&
+                  bounty.sfl && (
+                    <Label
+                      type={isSold ? "success" : "warning"}
+                      icon={flowerIcon}
+                      secondaryIcon={
+                        isSold ? SUNNYSIDE.icons.confirm : undefined
+                      }
+                    >
+                      {`Reward: ${bounty.sfl ?? 0} FLOWER`}
+                    </Label>
+                  )}
+              </div>
+            </div>
+          </div>
+        </div>
+        {!readonly && (
+          <div
+            className={classNames("flex w-full", {
+              "space-x-1": confirmExchange,
+            })}
+          >
+            {confirmExchange && (
+              <Button onClick={() => setConfirmExchange(false)}>
+                {t("cancel")}
+              </Button>
+            )}
+
+            <Button disabled={!canSell()} onClick={buttonHandler}>
+              {confirmExchange ? t("confirm") : t("sell")}
+            </Button>
+          </div>
+        )}
+      </>
+    </InnerPanel>
+  );
+};

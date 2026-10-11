@@ -1,0 +1,402 @@
+import type { BuffName } from "./buffs";
+import type { BoostName, GameState, InventoryItemName } from "./game";
+import {
+  getAscensionLevel,
+  getExperienceToNextLevel,
+  getTotalBumpkinLevel,
+  MAX_BUMPKIN_LEVEL,
+  meetsLevelRequirement,
+} from "../lib/level";
+import {
+  CHAPTER_ORDER,
+  getChapterBanner,
+  getChapterTicket,
+  getCurrentChapter,
+} from "./chapters";
+import { isCollectibleBuilt } from "../lib/collectibleBuilt";
+import { hasVipAccess } from "../lib/vipAccess";
+
+export type DailyRewardDefinition = {
+  id: DailyRewardName;
+  label: string;
+  items?: Partial<Record<InventoryItemName, number>>;
+  coins?: number;
+  sfl?: number;
+  xp?: number;
+  buff?: BuffName;
+};
+
+type StreakMilestone = {
+  days: number;
+  reward: DailyRewardDefinition;
+};
+
+export type DailyRewardName =
+  | "default-reward"
+  | "onboarding-day-1-sprout-starter"
+  | "onboarding-day-2-builder-basics"
+  | "onboarding-day-3-harvesters-gift"
+  | "onboarding-day-4-tool-tune-up"
+  | "onboarding-day-5-bumpkin-gift"
+  | "onboarding-day-6-anchovy-kit"
+  | "onboarding-day-7-first-week-finale"
+  | "weekly-day-1-tool-cache"
+  | "weekly-day-2-growth-boost"
+  | "weekly-day-3-love-box"
+  | "weekly-day-4-angler-pack"
+  | "weekly-day-5-growth-feast"
+  | "weekly-day-6-coin-stash"
+  | "weekly-mega-box"
+  | "streak-one-year"
+  | "streak-two-year"
+  | "streak-three-year"
+  | "streak-four-year"
+  | "weekly-day-6-coin-stash"
+  | "weekly-mega-box"
+  | "streak-one-year"
+  | "streak-two-year"
+  | "streak-three-year"
+  | "streak-four-year";
+
+// The first 7 rewards, players can claim without losing a streak
+const ONBOARDING_REWARDS: DailyRewardDefinition[] = [
+  {
+    id: "onboarding-day-1-sprout-starter",
+    label: "Sprout Starter",
+    items: {
+      "Sunflower Seed": 70,
+      "Rhubarb Seed": 30,
+      "Carrot Seed": 20,
+    },
+    coins: 50,
+  },
+  {
+    id: "onboarding-day-2-builder-basics",
+    label: "Builder Basics",
+    items: {
+      Wood: 5,
+      Stone: 1,
+    },
+  },
+  {
+    id: "onboarding-day-3-harvesters-gift",
+    label: "Harvester's Gift",
+    items: {
+      "Basic Love Box": 1,
+      "Cabbers n Mash": 2,
+    },
+    coins: 200,
+  },
+  {
+    id: "onboarding-day-4-tool-tune-up",
+    label: "Tool Tune-Up",
+    items: {
+      Axe: 3,
+      Pickaxe: 2,
+      "Stone Pickaxe": 1,
+    },
+  },
+  {
+    id: "onboarding-day-5-bumpkin-gift",
+    label: "Bumpkin Gift",
+    coins: 350,
+  },
+  {
+    id: "onboarding-day-6-anchovy-kit",
+    label: "Anchovy Kit",
+    items: {
+      Rod: 3,
+      Earthworm: 5,
+      Carrot: 30,
+    },
+  },
+  {
+    id: "onboarding-day-7-first-week-finale",
+    label: "First Week Finale",
+    items: {
+      "Weekly Mega Box": 1,
+      Gem: 50,
+    },
+  },
+];
+
+const POTION_XP_END_GAME_FLOOR = 0.04;
+const POTION_XP_CURVE_TUNING = 1.5;
+const LN_200 = Math.log(200);
+
+/**
+ * Day-5 (Growth Feast) XP for ascended players, granted per total Bumpkin level.
+ * Linear (not band-XP-scaled) so the reward stays ascension-aware and monotonic
+ * without compounding — see `WEEKLY_REWARDS` for why the legacy curve can't be used.
+ */
+const DAILY_XP_PER_TOTAL_LEVEL = 1000;
+
+/**
+ * Calculates:
+ * L3 + 0.42 * ((ln(200) - ln(value)) / ln(200)) ^ L2
+ */
+export function calculateXPPotion(
+  level: number,
+  xpToNextLevel: number,
+): number {
+  const percetangeIncrease =
+    POTION_XP_END_GAME_FLOOR +
+    0.42 *
+      Math.pow((LN_200 - Math.log(level)) / LN_200, POTION_XP_CURVE_TUNING);
+
+  return Math.floor(xpToNextLevel * percetangeIncrease);
+}
+
+const WEEKLY_REWARDS: (game: GameState) => DailyRewardDefinition[] = (
+  game: GameState,
+) => {
+  const ascensionLevel = game.island.ascensionLevel ?? 0;
+  const ascension = getAscensionLevel({
+    experience: game.bumpkin.experience ?? 0,
+    ascensionLevel,
+  });
+  // Monotonic total level (ascension-aware): 1..150 pre-ascension, then +50 per band
+  // (A1 L1 → 151, A1 L50 → 200, A2 L50 → 250, …). Uncapped — every scaled reward (tools,
+  // coins) must keep growing with ascension, so A2 L50 reads 250, not a 200-clamped 200.
+  // Mirror of the backend (`domain/game/types/dailyRewards.ts`).
+  const totalLevel = getTotalBumpkinLevel({
+    experience: game.bumpkin.experience ?? 0,
+    ascensionLevel,
+  });
+  // `calculateXPPotion` is only defined on the historical 1..200 domain (its ln term goes
+  // negative past 200). Non-ascended players never exceed 150, so this clamp is just a
+  // safety net for that one call — item/coin scaling reads the uncapped `totalLevel`.
+  const potionLevel = Math.min(totalLevel, MAX_BUMPKIN_LEVEL);
+  const { experienceToNextLevel } = getExperienceToNextLevel(
+    game.bumpkin?.experience ?? 0,
+  );
+
+  const scaleAmount = (base: number, multiplier: number) => {
+    const baseMultiplier = Math.ceil(multiplier);
+    return Math.max(1, Math.floor(base * baseMultiplier));
+  };
+
+  // Day-5 (Growth Feast) XP. Pre-ascension keeps the historical fraction-of-next-level
+  // curve. Once ascended, that curve is unusable: `getExperienceToNextLevel` caps at
+  // level 150 (a flat 2,290,000) and `calculateXPPotion`'s percentage pins to its 0.04
+  // floor once total level clamps at 200 — so every ascended player got an identical,
+  // ascension-blind 91,600 (A1 L50 == A2 L50). Instead scale linearly off the monotonic
+  // total level: ascension-aware, a bump (not a drop) at the ascension boundary, and a
+  // low linear — not band-XP-exponential — curve so this one chest can't compound XP.
+  const day2Xp =
+    ascensionLevel >= 1
+      ? DAILY_XP_PER_TOTAL_LEVEL * totalLevel
+      : calculateXPPotion(potionLevel, experienceToNextLevel);
+
+  const loveBox = (() => {
+    if (meetsLevelRequirement(ascension, { ascension: 0, level: 101 })) {
+      return "Silver Love Box";
+    }
+    if (meetsLevelRequirement(ascension, { ascension: 0, level: 51 })) {
+      return "Bronze Love Box";
+    }
+
+    return "Basic Love Box";
+  })();
+
+  return [
+    {
+      id: "weekly-day-1-tool-cache",
+      label: "Tool Cache",
+      items: {
+        Axe: scaleAmount(5, totalLevel / 25),
+        Pickaxe: scaleAmount(2, totalLevel / 25),
+        "Stone Pickaxe": scaleAmount(1, totalLevel / 25),
+      },
+    },
+    {
+      id: "weekly-day-2-growth-boost",
+      label: "Growth Boost",
+      buff: "Power hour",
+    },
+    {
+      id: "weekly-day-3-love-box",
+      label: "Love Box",
+      items: {
+        [loveBox]: 1,
+      },
+    },
+    {
+      id: "weekly-day-4-angler-pack",
+      label: "Angler Pack",
+      items: {
+        Rod: scaleAmount(5, Math.max(1, Math.floor(totalLevel / 25))),
+        Earthworm: scaleAmount(3, Math.max(1, Math.floor(totalLevel / 25))),
+        Grub: scaleAmount(2, Math.max(1, Math.floor(totalLevel / 25))),
+      },
+    },
+    {
+      id: "weekly-day-5-growth-feast",
+      label: "Growth Feast",
+      xp: day2Xp,
+    },
+    {
+      id: "weekly-day-6-coin-stash",
+      label: "Coin Stash",
+      coins: Math.floor(500 * (totalLevel / 25)),
+    },
+    {
+      id: "weekly-mega-box",
+      label: "Weekly Mega Box",
+      items: {
+        "Weekly Mega Box": 1,
+      },
+    },
+  ];
+};
+
+const STREAK_MILESTONES: StreakMilestone[] = [
+  {
+    days: 364,
+    reward: {
+      id: "streak-one-year",
+      label: "Yearly Streak Reward",
+      coins: 10000,
+      items: {
+        "Pirate Cake": 10,
+        "Treasure Key": 1,
+        "Rare Key": 1,
+        "Luxury Key": 1,
+      },
+    },
+  },
+  {
+    days: 729,
+    reward: {
+      id: "streak-two-year",
+      label: "Two Year Streak Reward",
+      coins: 10000,
+      items: {
+        "Pizza Margherita": 5,
+        "Super Totem": 1,
+        Gem: 320,
+        "Luxury Key": 1,
+      },
+    },
+  },
+  {
+    days: 1094,
+    reward: {
+      id: "streak-three-year",
+      label: "Three Year Streak Reward",
+      coins: 10000,
+      items: {
+        "Pirate Cake": 15,
+        "Treasure Key": 2,
+        "Rare Key": 2,
+        "Luxury Key": 2,
+      },
+    },
+  },
+  {
+    days: 1459,
+    reward: {
+      id: "streak-four-year",
+      label: "Four Year Streak Reward",
+      coins: 20000,
+      items: {
+        "Pizza Margherita": 10,
+        "Super Totem": 1,
+        Gem: 500,
+        "Luxury Key": 2,
+      },
+    },
+  },
+];
+
+export function getWeeklyReward({
+  game,
+  streak,
+}: {
+  game: GameState;
+  streak: number;
+}): DailyRewardDefinition {
+  const rewards = WEEKLY_REWARDS(game);
+  return rewards[streak % rewards.length];
+}
+
+export function getMilestoneRewards({
+  streak,
+}: {
+  streak: number;
+}): DailyRewardDefinition[] {
+  if (streak <= 0) {
+    return [];
+  }
+
+  let milestone: DailyRewardDefinition | undefined;
+
+  STREAK_MILESTONES.forEach(({ days, reward }) => {
+    if (streak === days) {
+      milestone = reward;
+    }
+  });
+
+  return milestone ? [milestone] : [];
+}
+
+export function getRewardsForStreak({
+  game,
+  streak,
+  currentDate,
+  now,
+}: {
+  game: GameState;
+  streak: number;
+  currentDate: string;
+  now: number;
+}): {
+  rewards: DailyRewardDefinition[];
+  boosts: { name: BoostName; value: string }[];
+} {
+  const boosts: { name: BoostName; value: string }[] = [];
+  const defaultReward: DailyRewardDefinition = {
+    id: "default-reward",
+    label: "Default Reward",
+    items: {
+      Cheer: 3,
+      [getChapterTicket(new Date(currentDate).getTime())]: 1,
+    },
+  };
+
+  let baseReward = getWeeklyReward({ game, streak });
+
+  // If they are beginning out,
+  if ((game.farmActivity["Daily Reward Collected"] ?? 0) <= 6 && streak <= 6) {
+    baseReward = ONBOARDING_REWARDS[streak];
+  }
+
+  if (isCollectibleBuilt({ name: "Giant Gold Bone", game })) {
+    defaultReward.items = {
+      ...defaultReward.items,
+      Cheer: (defaultReward.items?.Cheer ?? 0) + 2,
+    };
+    boosts.push({ name: "Giant Gold Bone", value: "+2" });
+  }
+
+  const currentChapter = getCurrentChapter(now);
+
+  if (
+    hasVipAccess({ game, now }) &&
+    CHAPTER_ORDER[currentChapter] >= CHAPTER_ORDER["Crabs and Traps"]
+  ) {
+    const currentBanner = getChapterBanner(now);
+    const bannerCount = game.inventory[currentBanner];
+    if (!bannerCount || bannerCount.lt(1)) {
+      defaultReward.items = {
+        ...defaultReward.items,
+        [currentBanner]: 1,
+      };
+    }
+  }
+
+  return {
+    rewards: [baseReward, defaultReward, ...getMilestoneRewards({ streak })],
+    boosts,
+  };
+}

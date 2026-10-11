@@ -1,0 +1,2511 @@
+import Decimal from "decimal.js-light";
+import type { BedName, GameState, InventoryItemName } from "./game";
+import type { BuffLabel } from ".";
+import powerup from "assets/icons/level_up.png";
+import lightning from "assets/icons/lightning.png";
+import helpIcon from "assets/icons/help.webp";
+import chefHat from "assets/icons/chef_hat.png";
+import tradeIcon from "assets/icons/trade.png";
+import bee from "assets/icons/bee.webp";
+import { CROP_LIFECYCLE } from "features/island/plots/lib/plant";
+import { SUNNYSIDE } from "assets/sunnyside";
+import { ITEM_DETAILS } from "./images";
+import { translate } from "lib/i18n/translate";
+import { getChapterTicket, CHAPTERS, getCurrentChapter } from "./chapters";
+import { CHAPTER_TICKET_BOOST_ITEMS } from "../events/landExpansion/completeNPCChore";
+import type { TranslationKeys } from "lib/i18n/dictionaries/types";
+import { isCollectible } from "../events/landExpansion/garbageSold";
+import { getKeys, getObjectEntries } from "lib/object";
+import { BED_FARMHAND_COUNT } from "./beds";
+import { isCollectibleBuilt, getExpiryCooldown } from "../lib/collectibleBuilt";
+import { hasFeatureAccess } from "lib/flags";
+import { SKILL_RANKS, getSkillLevel } from "./bumpkinSkills";
+import { FRUITFUL_BLEND_YIELD } from "./fertilisers";
+
+type FertiliserBuffLabelName =
+  | "Sprout Mix"
+  | "Fruitful Blend"
+  | "Sproutroot Surprise"
+  | "Turbofruit Mix";
+
+export function getFertiliserBuffLabels({
+  fertiliser,
+  game,
+}: {
+  fertiliser: FertiliserBuffLabelName;
+  game: GameState;
+}): BuffLabel[] {
+  if (fertiliser === "Sprout Mix") {
+    return [
+      {
+        shortDescription: translate("description.sprout.mix.boost"),
+        labelType: "success",
+        boostTypeIcon: powerup,
+        boostedItemIcon: ITEM_DETAILS["Crop Plot"].image,
+      },
+      ...(isCollectibleBuilt({ game, name: "Knowledge Crab" })
+        ? [
+            {
+              shortDescription: translate(
+                "description.knowledge.crab.yield.boost",
+              ),
+              labelType: "success" as const,
+              boostTypeIcon: powerup,
+              boostedItemIcon: ITEM_DETAILS["Sprout Mix"].image,
+            },
+          ]
+        : []),
+    ];
+  }
+
+  if (fertiliser === "Fruitful Blend") {
+    const fruitfulBountyLevel = getSkillLevel(
+      game.bumpkin.skills,
+      "Fruitful Bounty",
+    );
+    return [
+      {
+        shortDescription: translate("description.fruitful.blend.boost"),
+        labelType: "success",
+        boostTypeIcon: powerup,
+        boostedItemIcon: ITEM_DETAILS["Fruit Patch"].image,
+      },
+      ...(fruitfulBountyLevel
+        ? [
+            {
+              shortDescription: translate(
+                "description.fruitful.bounty.skill.boost.ranked",
+                {
+                  // Marginal yield the skill adds on top of Fruitful Blend's
+                  // base +0.1, which it multiplies. Decimal because the base
+                  // is 0.1: a plain 0.1 * 3 yields 0.30000000000000004.
+                  value: new Decimal(FRUITFUL_BLEND_YIELD)
+                    .mul(
+                      SKILL_RANKS["Fruitful Bounty"].ranks[
+                        fruitfulBountyLevel - 1
+                      ] - 1,
+                    )
+                    .toNumber(),
+                },
+              ),
+              labelType: "success" as const,
+              boostTypeIcon: powerup,
+              boostedItemIcon: ITEM_DETAILS["Fruitful Blend"].image,
+            },
+          ]
+        : []),
+    ];
+  }
+
+  if (fertiliser === "Sproutroot Surprise") {
+    return [
+      ...getFertiliserBuffLabels({
+        fertiliser: "Sprout Mix",
+        game,
+      }),
+      {
+        shortDescription: hasFeatureAccess(game, "SPEED_BOOSTS")
+          ? translate("description.rapid.root.boost.speed")
+          : translate("description.rapid.root.boost"),
+        labelType: "info",
+        boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+        boostedItemIcon: ITEM_DETAILS["Crop Plot"].image,
+      },
+    ];
+  }
+
+  return [
+    ...getFertiliserBuffLabels({
+      fertiliser: "Fruitful Blend",
+      game,
+    }),
+    {
+      shortDescription: hasFeatureAccess(game, "SPEED_BOOSTS")
+        ? translate("description.turbofruit.mix.boost.speed")
+        : translate("description.turbofruit.mix.boost"),
+      labelType: "info",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+      boostedItemIcon: ITEM_DETAILS["Fruit Patch"].image,
+    },
+  ];
+}
+
+export const COLLECTIBLE_BUFF_LABELS: Partial<
+  Record<InventoryItemName, (game: GameState) => BuffLabel[]>
+> = {
+  // Crop Boosts
+  "Basic Scarecrow": ({ bumpkin }) => [
+    {
+      shortDescription: bumpkin.skills["Chonky Scarecrow"]
+        ? translate("description.basic.scarecrow.boost.skill")
+        : translate("description.basic.scarecrow.boost"),
+      labelType: "info",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+    },
+    {
+      shortDescription: bumpkin.skills["Chonky Scarecrow"]
+        ? translate("description.basic.scarecrow.boost.aoe.skill")
+        : translate("description.basic.scarecrow.boost.aoe"),
+      labelType: "vibrant",
+      boostTypeIcon: lightning,
+    },
+  ],
+  "Scary Mike": ({ bumpkin }) => [
+    {
+      shortDescription: bumpkin.skills["Horror Mike"]
+        ? translate("description.scary.mike.boost.skill")
+        : translate("description.scary.mike.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+    },
+    {
+      shortDescription: bumpkin.skills["Horror Mike"]
+        ? translate("description.scary.mike.boost.aoe.skill")
+        : translate("description.scary.mike.boost.aoe"),
+      labelType: "vibrant",
+      boostTypeIcon: lightning,
+    },
+  ],
+  "Laurie the Chuckle Crow": ({ bumpkin }) => [
+    {
+      shortDescription: bumpkin.skills["Laurie's Gains"]
+        ? translate("description.laurie.chuckle.crow.boost.skill")
+        : translate("description.laurie.chuckle.crow.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+    },
+    {
+      shortDescription: bumpkin.skills["Laurie's Gains"]
+        ? translate("description.laurie.chuckle.crow.boost.aoe.skill")
+        : translate("description.laurie.chuckle.crow.boost.aoe"),
+      labelType: "vibrant",
+      boostTypeIcon: lightning,
+    },
+  ],
+  Nancy: () => [
+    {
+      shortDescription: translate("description.nancy.boost"),
+      labelType: "info",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+    },
+    {
+      shortDescription: translate("description.nancy.warning"),
+      labelType: "danger",
+    },
+  ],
+  Scarecrow: () => [
+    {
+      shortDescription: translate("description.nancy.boost"),
+      labelType: "info",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+    },
+    {
+      shortDescription: translate("description.scarecrow.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+    },
+    {
+      shortDescription: translate("description.scarecrow.warning"),
+      labelType: "danger",
+    },
+  ],
+  Kuebiko: () => [
+    {
+      shortDescription: translate("description.nancy.boost"),
+      labelType: "info",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+    },
+    {
+      shortDescription: translate("description.scarecrow.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+    },
+    {
+      shortDescription: translate("description.kuebiko.boost"),
+      labelType: "vibrant",
+      boostTypeIcon: lightning,
+    },
+  ],
+  Gnome: () => [
+    {
+      shortDescription: translate("description.gnome.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+    },
+    {
+      shortDescription: translate("description.gnome.boost.aoe"),
+      labelType: "vibrant",
+      boostTypeIcon: lightning,
+    },
+    {
+      shortDescription: translate("description.gnome.warning"),
+      labelType: "danger",
+    },
+  ],
+  "Sir Goldensnout": () => [
+    {
+      shortDescription: translate("description.sir.goldensnout.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+    },
+    {
+      shortDescription: translate("description.sir.goldensnout.boost.aoe"),
+      labelType: "vibrant",
+      boostTypeIcon: lightning,
+    },
+  ],
+  "Lunar Calendar": () => [
+    {
+      shortDescription: translate("description.lunar.calendar.boost"),
+      labelType: "info",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+    },
+  ],
+  "Peeled Potato": () => [
+    {
+      shortDescription: translate("description.peeled.potato.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: CROP_LIFECYCLE["Basic Biome"].Potato.crop,
+    },
+  ],
+  "Victoria Sisters": () => [
+    {
+      shortDescription: translate("description.victoria.sisters.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: CROP_LIFECYCLE["Basic Biome"].Pumpkin.crop,
+    },
+  ],
+  "Freya Fox": () => [
+    {
+      shortDescription: translate("description.freya.fox.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: CROP_LIFECYCLE["Basic Biome"].Pumpkin.crop,
+    },
+  ],
+  "Easter Bunny": () => [
+    {
+      shortDescription: translate("description.easter.bunny.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: CROP_LIFECYCLE["Basic Biome"].Carrot.crop,
+    },
+  ],
+  "Pablo The Bunny": () => [
+    {
+      shortDescription: translate("description.pablo.bunny.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: CROP_LIFECYCLE["Basic Biome"].Carrot.crop,
+    },
+  ],
+  "Cabbage Boy": (game) => [
+    {
+      shortDescription: isCollectibleBuilt({ game, name: "Cabbage Girl" })
+        ? translate("description.cabbage.boy.boost.boosted")
+        : translate("description.cabbage.boy.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: CROP_LIFECYCLE["Basic Biome"].Cabbage.crop,
+    },
+  ],
+  "Cabbage Girl": () => [
+    {
+      shortDescription: translate("description.cabbage.girl.boost"),
+      labelType: "info",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+      boostedItemIcon: CROP_LIFECYCLE["Basic Biome"].Cabbage.crop,
+    },
+  ],
+  Karkinos: () => [
+    {
+      shortDescription: translate("description.Karkinos.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: CROP_LIFECYCLE["Basic Biome"].Cabbage.crop,
+    },
+    {
+      shortDescription: translate("description.Karkinos.warning"),
+      labelType: "danger",
+    },
+  ],
+  "Golden Cauliflower": () => [
+    {
+      shortDescription: translate("description.golden.cauliflower.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: CROP_LIFECYCLE["Basic Biome"].Cauliflower.crop,
+    },
+  ],
+  "Mysterious Parsnip": () => [
+    {
+      shortDescription: translate("description.mysterious.parsnip.boost"),
+      labelType: "info",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+      boostedItemIcon: CROP_LIFECYCLE["Basic Biome"].Parsnip.crop,
+    },
+  ],
+  "Purple Trail": () => [
+    {
+      shortDescription: translate("description.purple.trail.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: CROP_LIFECYCLE["Basic Biome"].Eggplant.crop,
+    },
+  ],
+  Obie: () => [
+    {
+      shortDescription: translate("description.obie.boost"),
+      labelType: "info",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+      boostedItemIcon: CROP_LIFECYCLE["Basic Biome"].Eggplant.crop,
+    },
+  ],
+  Maximus: () => [
+    {
+      shortDescription: translate("description.maximus.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: CROP_LIFECYCLE["Basic Biome"].Eggplant.crop,
+    },
+  ],
+  Poppy: () => [
+    {
+      shortDescription: translate("description.poppy.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: CROP_LIFECYCLE["Basic Biome"].Corn.crop,
+    },
+  ],
+  Kernaldo: () => [
+    {
+      shortDescription: translate("description.kernaldo.boost"),
+      labelType: "info",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+      boostedItemIcon: CROP_LIFECYCLE["Basic Biome"].Corn.crop,
+    },
+  ],
+  "Queen Cornelia": () => [
+    {
+      shortDescription: translate("description.queen.cornelia.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: CROP_LIFECYCLE["Basic Biome"].Corn.crop,
+    },
+    {
+      shortDescription: translate("description.queen.cornelia.boost.aoe"),
+      labelType: "vibrant",
+      boostTypeIcon: lightning,
+    },
+  ],
+  Foliant: () => [
+    {
+      shortDescription: translate("description.foliant.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: CROP_LIFECYCLE["Basic Biome"].Kale.crop,
+    },
+  ],
+  Hoot: () => [
+    {
+      shortDescription: translate("description.hoot.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+    },
+  ],
+  "Hungry Caterpillar": () => [
+    {
+      shortDescription: translate("description.hungry.caterpillar.boost"),
+      labelType: "vibrant",
+      boostTypeIcon: lightning,
+    },
+  ],
+
+  // Fertilisers
+  "Sprout Mix": (game) =>
+    getFertiliserBuffLabels({
+      fertiliser: "Sprout Mix",
+      game,
+    }),
+  "Fruitful Blend": (game) =>
+    getFertiliserBuffLabels({
+      fertiliser: "Fruitful Blend",
+      game,
+    }),
+  "Rapid Root": (game) => [
+    {
+      shortDescription: hasFeatureAccess(game, "SPEED_BOOSTS")
+        ? translate("description.rapid.root.boost.speed")
+        : translate("description.rapid.root.boost"),
+      labelType: "info",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+      boostedItemIcon: ITEM_DETAILS["Crop Plot"].image,
+    },
+  ],
+  "Sproutroot Surprise": (game) =>
+    getFertiliserBuffLabels({
+      fertiliser: "Sproutroot Surprise",
+      game,
+    }),
+  "Turbofruit Mix": (game) =>
+    getFertiliserBuffLabels({
+      fertiliser: "Turbofruit Mix",
+      game,
+    }),
+  "Greenhouse Glow": (game) => [
+    {
+      shortDescription: hasFeatureAccess(game, "SPEED_BOOSTS")
+        ? translate("description.greenhouse.glow.boost.speed")
+        : translate("description.greenhouse.glow.boost"),
+      labelType: "info",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+      boostedItemIcon: ITEM_DETAILS["Greenhouse"].image,
+    },
+  ],
+  "Greenhouse Goodie": () => [
+    {
+      shortDescription: translate("description.greenhouse.goodie.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: ITEM_DETAILS["Greenhouse"].image,
+    },
+  ],
+  "Salt Lick": () => [
+    {
+      shortDescription: translate("description.salt.lick.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+    },
+  ],
+  "Honey Treat": () => [
+    {
+      shortDescription: translate("description.honey.treat.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+    },
+  ],
+
+  // Clash of Factions
+  "Turbo Sprout": () => [
+    {
+      shortDescription: translate("description.turbo.sprout.boost"),
+      labelType: "info",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+    },
+  ],
+
+  Soybliss: () => [
+    {
+      shortDescription: translate("description.soybliss.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: CROP_LIFECYCLE["Basic Biome"].Soybean.crop,
+    },
+  ],
+
+  "Grape Granny": () => [
+    {
+      shortDescription: translate("description.grape.granny.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: ITEM_DETAILS.Grape.image,
+    },
+  ],
+  Vinny: () => [
+    {
+      shortDescription: translate("description.vinny.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: ITEM_DETAILS.Grape.image,
+    },
+  ],
+  "Rice Panda": () => [
+    {
+      shortDescription: translate("description.rice.panda.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: ITEM_DETAILS.Rice.image,
+    },
+  ],
+
+  // Fruit Boosts
+  "Immortal Pear": ({ bumpkin }) => [
+    {
+      shortDescription: bumpkin.skills["Pear Turbocharge"]
+        ? translate("description.immortal.pear.boosted.boost")
+        : translate("description.immortal.pear.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+    },
+  ],
+  "Black Bearry": () => [
+    {
+      shortDescription: translate("description.black.bearry.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: ITEM_DETAILS.Blueberry.image,
+    },
+  ],
+  "Squirrel Monkey": () => [
+    {
+      shortDescription: translate("description.squirrel.monkey.boost"),
+      labelType: "info",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+      boostedItemIcon: ITEM_DETAILS.Orange.image,
+    },
+  ],
+  "Lady Bug": () => [
+    {
+      shortDescription: translate("description.lady.bug.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: ITEM_DETAILS.Apple.image,
+    },
+  ],
+  "Banana Chicken": () => [
+    {
+      shortDescription: translate("description.banana.chicken.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: ITEM_DETAILS.Banana.image,
+    },
+  ],
+  Nana: () => [
+    {
+      shortDescription: translate("description.nana.boost"),
+      labelType: "info",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+      boostedItemIcon: ITEM_DETAILS.Banana.image,
+    },
+  ],
+
+  // Mutant Crops
+  "Carrot Sword": () => [
+    {
+      shortDescription: translate("description.carrot.sword.boost"),
+      labelType: "vibrant",
+      boostTypeIcon: lightning,
+    },
+  ],
+  "Stellar Sunflower": () => [
+    {
+      shortDescription: translate("description.stellar.sunflower.boost"),
+      labelType: "vibrant",
+      boostTypeIcon: lightning,
+      boostedItemIcon: CROP_LIFECYCLE["Basic Biome"].Sunflower.crop,
+    },
+  ],
+  "Potent Potato": () => [
+    {
+      shortDescription: translate("description.potent.potato.boost"),
+      labelType: "vibrant",
+      boostTypeIcon: lightning,
+      boostedItemIcon: CROP_LIFECYCLE["Basic Biome"].Potato.crop,
+    },
+  ],
+  "Radical Radish": () => [
+    {
+      shortDescription: translate("description.radical.radish.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: CROP_LIFECYCLE["Basic Biome"].Radish.crop,
+    },
+  ],
+  "Lab Grown Pumpkin": () => [
+    {
+      shortDescription: translate("description.lg.pumpkin.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: CROP_LIFECYCLE["Basic Biome"].Pumpkin.crop,
+    },
+  ],
+  "Lab Grown Carrot": () => [
+    {
+      shortDescription: translate("description.lg.carrot.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: CROP_LIFECYCLE["Basic Biome"].Carrot.crop,
+    },
+  ],
+  "Lab Grown Radish": () => [
+    {
+      shortDescription: translate("description.lg.radish.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: CROP_LIFECYCLE["Basic Biome"].Radish.crop,
+    },
+  ],
+
+  // Animals
+  "Fat Chicken": () => [
+    {
+      shortDescription: translate("description.fat.chicken.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: SUNNYSIDE.animalFoods.kernel_blend,
+    },
+  ],
+  "Rich Chicken": () => [
+    {
+      shortDescription: translate("description.rich.chicken.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: SUNNYSIDE.resource.egg,
+    },
+  ],
+  "Speed Chicken": () => [
+    {
+      shortDescription: translate("description.speed.chicken.boost"),
+      labelType: "info",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+      boostedItemIcon: SUNNYSIDE.resource.egg,
+    },
+  ],
+  "Ayam Cemani": () => [
+    {
+      shortDescription: translate("description.ayam.cemani.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: SUNNYSIDE.resource.egg,
+    },
+  ],
+  "Squid Chicken": () => [
+    {
+      shortDescription: translate("description.squidChicken.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: SUNNYSIDE.resource.egg,
+    },
+  ],
+  "El Pollo Veloz": () => [
+    {
+      shortDescription: translate("description.el.pollo.veloz.boost"),
+      labelType: "info",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+      boostedItemIcon: SUNNYSIDE.resource.egg,
+    },
+  ],
+  Rooster: () => [
+    {
+      shortDescription: translate("description.rooster.boost"),
+      labelType: "vibrant",
+      boostTypeIcon: lightning,
+    },
+  ],
+  "Undead Rooster": () => [
+    {
+      shortDescription: translate("description.undead.rooster.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: SUNNYSIDE.resource.egg,
+    },
+  ],
+  "Chicken Coop": () => [
+    {
+      shortDescription: translate("description.chicken.coop.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: SUNNYSIDE.resource.egg,
+    },
+    {
+      shortDescription: translate("description.chicken.coop.boost.two"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+    },
+    {
+      shortDescription: translate("description.chicken.coop.boost.three"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+    },
+  ],
+  "Farm Dog": () => [
+    {
+      shortDescription: translate("description.farm.dog.boost"),
+      labelType: "info",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+      boostedItemIcon: SUNNYSIDE.animals.sheepSleeping,
+    },
+  ],
+  "Gold Egg": () => [
+    {
+      shortDescription: translate("description.gold.egg.boost"),
+      labelType: "vibrant",
+      boostTypeIcon: lightning,
+      boostedItemIcon: SUNNYSIDE.animalFoods.kernel_blend,
+    },
+  ],
+  Bale: ({ bumpkin }) => {
+    // Double Bale multiplies Bale's +0.1 base by its rank (x2 / x2.5 / x3), so
+    // the label must reflect the owned rank rather than a hardcoded +0.2.
+    const doubleBaleLevel = getSkillLevel(bumpkin.skills, "Double Bale");
+    const baleValue = doubleBaleLevel
+      ? new Decimal(0.1)
+          .mul(SKILL_RANKS["Double Bale"].ranks[doubleBaleLevel - 1])
+          .toNumber()
+      : 0.1;
+
+    return [
+      {
+        shortDescription: translate("description.bale.eggBoost", {
+          value: baleValue,
+        }),
+        labelType: "success",
+        boostTypeIcon: powerup,
+        boostedItemIcon: SUNNYSIDE.resource.egg,
+      },
+      ...(bumpkin.skills["Bale Economy"]
+        ? ([
+            {
+              shortDescription: translate("description.bale.milkBoost", {
+                value: baleValue,
+              }),
+              labelType: "success",
+              boostTypeIcon: powerup,
+              boostedItemIcon: SUNNYSIDE.resource.milk,
+            },
+            {
+              shortDescription: translate("description.bale.woolBoost", {
+                value: baleValue,
+              }),
+              labelType: "success",
+              boostTypeIcon: powerup,
+              boostedItemIcon: SUNNYSIDE.resource.wool,
+            },
+          ] as BuffLabel[])
+        : []),
+    ];
+  },
+
+  // Resources
+  "Woody the Beaver": () => [
+    {
+      shortDescription: translate("description.woody.beaver.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: SUNNYSIDE.resource.wood,
+    },
+    {
+      shortDescription: translate("description.woody.beaver.warning"),
+      labelType: "danger",
+    },
+  ],
+  "Apprentice Beaver": () => [
+    {
+      shortDescription: translate("description.woody.beaver.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: SUNNYSIDE.resource.wood,
+    },
+    {
+      shortDescription: translate("description.apprentice.beaver.boost"),
+      labelType: "info",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+      boostedItemIcon: SUNNYSIDE.resource.wood,
+    },
+    {
+      shortDescription: translate("description.apprentice.beaver.warning"),
+      labelType: "danger",
+    },
+  ],
+  "Foreman Beaver": () => [
+    {
+      shortDescription: translate("description.woody.beaver.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: SUNNYSIDE.resource.wood,
+    },
+    {
+      shortDescription: translate("description.apprentice.beaver.boost"),
+      labelType: "info",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+      boostedItemIcon: SUNNYSIDE.resource.wood,
+    },
+    {
+      shortDescription: translate("description.foreman.beaver.boost"),
+      labelType: "vibrant",
+      boostTypeIcon: lightning,
+      boostedItemIcon: SUNNYSIDE.resource.wood,
+    },
+  ],
+  "Wood Nymph Wendy": () => [
+    {
+      shortDescription: translate("description.wood.nymph.wendy.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: SUNNYSIDE.resource.wood,
+    },
+  ],
+  "Tiki Totem": () => [
+    {
+      shortDescription: translate("description.tiki.totem.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: SUNNYSIDE.resource.wood,
+    },
+  ],
+  "Tunnel Mole": () => [
+    {
+      shortDescription: translate("description.tunnel.mole.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: SUNNYSIDE.resource.stone,
+    },
+  ],
+  "Rocky the Mole": () => [
+    {
+      shortDescription: translate("description.rocky.mole.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: ITEM_DETAILS.Iron.image,
+    },
+  ],
+  Nugget: () => [
+    {
+      shortDescription: translate("description.nugget.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: ITEM_DETAILS.Gold.image,
+    },
+  ],
+  "Rock Golem": () => [
+    {
+      shortDescription: translate("description.rock.golem.boost"),
+      labelType: "vibrant",
+      boostTypeIcon: lightning,
+      boostedItemIcon: SUNNYSIDE.resource.stone,
+    },
+  ],
+  "Iron Idol": () => [
+    {
+      shortDescription: translate("description.iron.idol.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: ITEM_DETAILS.Iron.image,
+    },
+  ],
+  "Tin Turtle": () => [
+    {
+      shortDescription: translate("description.tin.turtle.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: SUNNYSIDE.resource.stone,
+    },
+    {
+      shortDescription: translate("description.turtle.boost.aoe"),
+      labelType: "vibrant",
+      boostTypeIcon: lightning,
+      boostedItemIcon: SUNNYSIDE.resource.stone,
+    },
+  ],
+  "Emerald Turtle": () => [
+    {
+      shortDescription: translate("description.emerald.turtle.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+    },
+    {
+      shortDescription: translate("description.turtle.boost.aoe"),
+      labelType: "vibrant",
+      boostTypeIcon: lightning,
+      boostedItemIcon: SUNNYSIDE.resource.stone,
+    },
+  ],
+  "Crimson Carp": () => [
+    {
+      labelType: "success",
+      shortDescription: translate("description.crimson.carp.boost"),
+      boostTypeIcon: powerup,
+      boostedItemIcon: ITEM_DETAILS.Crimstone.image,
+    },
+  ],
+  "Battle Fish": () => [
+    {
+      labelType: "success",
+      shortDescription: translate("description.battle.fish.boost"),
+      boostTypeIcon: powerup,
+    },
+  ],
+  "Lemon Shark": () => [
+    {
+      labelType: "success",
+      shortDescription: translate("description.lemon.shark.boost"),
+      boostTypeIcon: powerup,
+      boostedItemIcon: ITEM_DETAILS.Lemon.image,
+    },
+  ],
+  "Longhorn Cowfish": () => [
+    {
+      labelType: "success",
+      shortDescription: translate("description.longhorn.cowfish.boost"),
+      boostTypeIcon: powerup,
+      boostedItemIcon: ITEM_DETAILS.Milk.image,
+    },
+  ],
+  "Crim Peckster": () => [
+    {
+      shortDescription: translate("description.crim.peckster.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: ITEM_DETAILS.Crimstone.image,
+    },
+  ],
+  "Knight Chicken": () => [
+    {
+      shortDescription: translate("description.knight.chicken.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+    },
+  ],
+  "Mushroom House": () => [
+    {
+      shortDescription: translate("description.mushroom.house.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: SUNNYSIDE.resource.wild_mushroom,
+    },
+  ],
+  "Queen Bee": () => [
+    {
+      shortDescription: translate("description.queen.bee.boost"),
+      labelType: "info",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+      boostedItemIcon: ITEM_DETAILS.Honey.image,
+    },
+  ],
+  "Humming Bird": () => [
+    {
+      shortDescription: translate("description.humming.bird.boost"),
+      labelType: "vibrant",
+      boostTypeIcon: lightning,
+      boostedItemIcon: ITEM_DETAILS["Red Pansy"].image,
+    },
+  ],
+  Beehive: () => [
+    {
+      shortDescription: translate("description.beehive.boost"),
+      labelType: "vibrant",
+      boostTypeIcon: lightning,
+    },
+  ],
+  "Pharaoh Chicken": () => [
+    {
+      shortDescription: translate("description.pharaoh.chicken.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: ITEM_DETAILS["Sand Shovel"].image,
+    },
+  ],
+
+  // Fish
+  "Skill Shrimpy": () => [
+    {
+      shortDescription: translate("description.skill.shrimpy.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: SUNNYSIDE.icons.fish,
+    },
+  ],
+  Walrus: () => [
+    {
+      shortDescription: translate("description.walrus.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: SUNNYSIDE.icons.fish,
+    },
+  ],
+  "Super Star": () => [
+    {
+      shortDescription: translate("description.super.star.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: SUNNYSIDE.icons.fish,
+    },
+  ],
+  Alba: () => [
+    {
+      shortDescription: translate("description.alba.boost"),
+      labelType: "vibrant",
+      boostTypeIcon: lightning,
+      boostedItemIcon: SUNNYSIDE.icons.fish,
+    },
+  ],
+
+  // Other
+  "Soil Krabby": () => [
+    {
+      shortDescription: translate("description.soil.krabby.boost"),
+      labelType: "info",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+    },
+  ],
+  "Knowledge Crab": () => [
+    {
+      shortDescription: translate("description.knowledge.crab.boost"),
+      labelType: "vibrant",
+      boostTypeIcon: lightning,
+      boostedItemIcon: ITEM_DETAILS["Sprout Mix"].image,
+    },
+  ],
+  "Maneki Neko": () => [
+    {
+      shortDescription: translate("description.maneki.neko.boost"),
+      labelType: "vibrant",
+      boostTypeIcon: lightning,
+      boostedItemIcon: ITEM_DETAILS["Pumpkin Soup"].image,
+    },
+  ],
+  "Dino Egg Trophy": () => [
+    {
+      shortDescription: translate("dinoEggTrophy.boost.description"),
+      labelType: "vibrant",
+      boostTypeIcon: lightning,
+      boostedItemIcon: SUNNYSIDE.ui.coins,
+    },
+  ],
+  "Treasure Map": () => [
+    {
+      shortDescription: translate("description.treasure.map.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: ITEM_DETAILS["Pirate Bounty"].image,
+    },
+  ],
+  "Heart of Davy Jones": () => [
+    {
+      shortDescription: translate("description.heart.of.davy.jones.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: SUNNYSIDE.tools.sand_shovel,
+    },
+  ],
+  "Genie Lamp": () => [
+    {
+      shortDescription: translate("description.genie.lamp.boost"),
+      labelType: "vibrant",
+      boostTypeIcon: lightning,
+    },
+  ],
+  // Food XP Boosts
+  "Grain Grinder": () => [
+    {
+      shortDescription: translate("description.grain.grinder.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+    },
+  ],
+  Observatory: () => [
+    {
+      shortDescription: translate("description.observatory.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+    },
+  ],
+  Blossombeard: () => [
+    {
+      labelType: "vibrant",
+      shortDescription: translate("description.blossombeard.boost"),
+      boostTypeIcon: lightning,
+    },
+  ],
+  "Desert Gnome": () => [
+    {
+      labelType: "vibrant",
+      shortDescription: translate("description.desertgnome.boost"),
+      boostTypeIcon: lightning,
+    },
+  ],
+  "Christmas Tree": () => [
+    {
+      shortDescription: translate("description.christmas.festive.tree.boost"),
+      labelType: "vibrant",
+      boostTypeIcon: lightning,
+    },
+  ],
+  "Festive Tree": () => [
+    {
+      shortDescription: translate("description.christmas.festive.tree.boost"),
+      labelType: "vibrant",
+      boostTypeIcon: lightning,
+    },
+  ],
+  "Grinx's Hammer": () => [
+    {
+      shortDescription: translate("description.grinxs.hammer.boost"),
+      labelType: "vibrant",
+      boostTypeIcon: lightning,
+      boostedItemIcon: SUNNYSIDE.tools.hammer,
+    },
+  ],
+  "Time Warp Totem": (game) => [
+    {
+      shortDescription: translate("description.time.warp.totem.boost"),
+      labelType: "info",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+    },
+    {
+      shortDescription: translate("description.temp.buff.effectTime", {
+        time: getExpiryCooldown("Time Warp Totem", game) / (60 * 60 * 1000),
+      }),
+      labelType: "danger",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+    },
+  ],
+
+  // Marine Marvels with Boosts
+  "Radiant Ray": () => [
+    {
+      shortDescription: translate("description.radiant.ray.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: ITEM_DETAILS.Iron.image,
+    },
+  ],
+  "Gilded Swordfish": () => [
+    {
+      shortDescription: translate("description.boost.gilded.swordfish"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: ITEM_DETAILS.Gold.image,
+    },
+  ],
+
+  "Flower Fox": () => [
+    {
+      shortDescription: translate("description.flower.fox.boost"),
+      labelType: "info",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+      boostedItemIcon: ITEM_DETAILS["Red Pansy"].image,
+    },
+  ],
+
+  "Hungry Hare": () => [
+    {
+      shortDescription: translate("description.hungryHare.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: ITEM_DETAILS["Fermented Carrots"].image,
+    },
+  ],
+
+  // Faction Shop
+  "Gourmet Hourglass": (game) => [
+    {
+      shortDescription: translate("description.gourmet.hourglass.boost"),
+      labelType: "info",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+    },
+    {
+      shortDescription: translate("description.temp.buff.effectTime", {
+        time: getExpiryCooldown("Gourmet Hourglass", game) / (60 * 60 * 1000),
+      }),
+      labelType: "danger",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+    },
+  ],
+  "Harvest Hourglass": (game) => [
+    {
+      shortDescription: hasFeatureAccess(game, "SPEED_BOOSTS")
+        ? translate("description.harvest.hourglass.boost.speed")
+        : translate("description.harvest.hourglass.boost"),
+      labelType: "info",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+    },
+    {
+      shortDescription: translate("description.temp.buff.effectTime", {
+        time: getExpiryCooldown("Harvest Hourglass", game) / (60 * 60 * 1000),
+      }),
+      labelType: "danger",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+    },
+  ],
+  "Timber Hourglass": (game) => [
+    {
+      shortDescription: hasFeatureAccess(game, "SPEED_BOOSTS")
+        ? translate("description.timber.hourglass.boost.speed")
+        : translate("description.timber.hourglass.boost"),
+      labelType: "info",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+    },
+    {
+      shortDescription: translate("description.temp.buff.effectTime", {
+        time: getExpiryCooldown("Timber Hourglass", game) / (60 * 60 * 1000),
+      }),
+      labelType: "danger",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+    },
+  ],
+  "Ore Hourglass": (game) => [
+    {
+      shortDescription: hasFeatureAccess(game, "SPEED_BOOSTS")
+        ? translate("description.ore.hourglass.boost.speed")
+        : translate("description.ore.hourglass.boost"),
+      labelType: "info",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+    },
+    {
+      shortDescription: translate("description.temp.buff.effectTime", {
+        time: getExpiryCooldown("Ore Hourglass", game) / (60 * 60 * 1000),
+      }),
+      labelType: "danger",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+    },
+  ],
+  "Orchard Hourglass": (game) => [
+    {
+      shortDescription: hasFeatureAccess(game, "SPEED_BOOSTS")
+        ? translate("description.orchard.hourglass.boost.speed")
+        : translate("description.orchard.hourglass.boost"),
+      labelType: "info",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+    },
+    {
+      shortDescription: translate("description.temp.buff.effectTime", {
+        time: getExpiryCooldown("Orchard Hourglass", game) / (60 * 60 * 1000),
+      }),
+      labelType: "danger",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+    },
+  ],
+  "Fisher's Hourglass": (game) => [
+    {
+      shortDescription: translate("description.fishers.hourglass.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+    },
+    {
+      shortDescription: translate("description.temp.buff.effectTime", {
+        time: getExpiryCooldown("Fisher's Hourglass", game) / (60 * 60 * 1000),
+      }),
+      labelType: "danger",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+    },
+  ],
+  "Blossom Hourglass": (game) => [
+    {
+      shortDescription: hasFeatureAccess(game, "SPEED_BOOSTS")
+        ? translate("description.blossom.hourglass.boost.speed")
+        : translate("description.blossom.hourglass.boost"),
+      labelType: "info",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+    },
+    {
+      shortDescription: translate("description.temp.buff.effectTime", {
+        time: getExpiryCooldown("Blossom Hourglass", game) / (60 * 60 * 1000),
+      }),
+      labelType: "danger",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+    },
+  ],
+  "Desert Rose": () => [
+    {
+      shortDescription: translate("description.desert.rose.boost"),
+      labelType: "vibrant",
+      boostTypeIcon: lightning,
+      boostedItemIcon: SUNNYSIDE.icons.plant,
+    },
+  ],
+  Chicory: () => [
+    {
+      shortDescription: translate("description.chicory.boost"),
+      labelType: "vibrant",
+      boostTypeIcon: lightning,
+      boostedItemIcon: SUNNYSIDE.icons.plant,
+    },
+  ],
+  "Pharaoh Gnome": () => [
+    {
+      shortDescription: translate("description.pharaoh.gnome.boost"),
+      labelType: "success",
+      boostedItemIcon: powerup,
+    },
+  ],
+  "Lemon Tea Bath": () => [
+    {
+      shortDescription: translate("description.lemon.tea.bath.boost"),
+      labelType: "info",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+      boostedItemIcon: ITEM_DETAILS.Lemon.image,
+    },
+  ],
+  "Tomato Clown": () => [
+    {
+      shortDescription: translate("description.tomato.clown.boost"),
+      labelType: "info",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+      boostedItemIcon: ITEM_DETAILS.Tomato.image,
+    },
+  ],
+  Cannonball: () => [
+    {
+      shortDescription: translate("description.cannonball.boost"),
+      labelType: "info",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+      boostedItemIcon: ITEM_DETAILS.Tomato.image,
+    },
+  ],
+  "Tomato Bombard": () => [
+    {
+      shortDescription: translate("description.tomato.bombard.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: ITEM_DETAILS.Tomato.image,
+    },
+  ],
+  Camel: () => [
+    {
+      shortDescription: translate("description.camel.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: ITEM_DETAILS.Sand.image,
+    },
+    {
+      shortDescription: translate("description.camel.boost.two"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: SUNNYSIDE.ui.coins,
+    },
+  ],
+  "Reveling Lemon": () => [
+    {
+      shortDescription: translate("description.reveling.lemon.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: ITEM_DETAILS.Lemon.image,
+    },
+  ],
+  "Lemon Frog": () => [
+    {
+      shortDescription: translate("description.lemon.frog.boost"),
+      labelType: "info",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+      boostedItemIcon: ITEM_DETAILS.Lemon.image,
+    },
+  ],
+  "Stone Beetle": () => [
+    {
+      shortDescription: translate("description.stone.beetle.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: SUNNYSIDE.resource.stone,
+    },
+  ],
+  "Iron Beetle": () => [
+    {
+      shortDescription: translate("description.iron.beetle.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: ITEM_DETAILS.Iron.image,
+    },
+  ],
+  "Gold Beetle": () => [
+    {
+      shortDescription: translate("description.gold.beetle.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: ITEM_DETAILS.Gold.image,
+    },
+  ],
+  "Fairy Circle": () => [
+    {
+      shortDescription: translate("description.fairy.circle.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: SUNNYSIDE.resource.wild_mushroom,
+    },
+  ],
+  Squirrel: () => [
+    {
+      shortDescription: translate("description.squirrel.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: SUNNYSIDE.resource.wood,
+    },
+  ],
+  Butterfly: () => [
+    {
+      shortDescription: translate("description.butterfly.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+    },
+  ],
+  Macaw: ({ bumpkin }) => [
+    {
+      shortDescription: bumpkin.skills["Loyal Macaw"]
+        ? translate("description.macaw.boosted.boost")
+        : translate("description.macaw.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+    },
+  ],
+  // Bull Run
+  "Sheaf of Plenty": () => [
+    {
+      shortDescription: translate("description.sheafOfPlenty.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: CROP_LIFECYCLE["Basic Biome"].Barley.crop,
+    },
+  ],
+  "Moo-ver": () => [
+    {
+      shortDescription: translate("description.mooVer.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: SUNNYSIDE.resource.leather,
+    },
+  ],
+  "Swiss Whiskers": () => [
+    {
+      shortDescription: translate("description.swissWhiskers.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: chefHat,
+    },
+  ],
+  Cluckulator: () => [
+    {
+      shortDescription: translate("description.cluckulator.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: SUNNYSIDE.animalFoods.kernel_blend,
+    },
+  ],
+  "Alien Chicken": () => [
+    {
+      shortDescription: translate("description.alien.chicken.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: SUNNYSIDE.resource.feather,
+    },
+  ],
+  "Toxic Tuft": () => [
+    {
+      shortDescription: translate("description.toxic.tuft.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: SUNNYSIDE.resource.merino_wool,
+    },
+  ],
+  "Astronaut Sheep": () => [
+    {
+      shortDescription: translate("description.astronautSheep.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: SUNNYSIDE.resource.wool,
+    },
+  ],
+  "Mermaid Sheep": () => [
+    {
+      shortDescription: translate("description.mermaidSheep.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: SUNNYSIDE.animalFoods.kernel_blend,
+    },
+  ],
+  Mootant: () => [
+    {
+      shortDescription: translate("description.mootant.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: SUNNYSIDE.resource.leather,
+    },
+  ],
+  "King of Bears": () => [
+    {
+      shortDescription: translate("description.kingOfBears.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: ITEM_DETAILS.Honey.image,
+    },
+  ],
+  "Super Totem": () => [
+    {
+      shortDescription: translate("description.superTotem.boost"),
+      labelType: "info",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+    },
+    {
+      shortDescription: translate("description.superTotem.boost.effectTime"),
+      labelType: "danger",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+    },
+  ],
+  "Golden Cow": () => [
+    {
+      shortDescription: translate("description.golden.cow.boost"),
+      labelType: "vibrant",
+      boostTypeIcon: lightning,
+      boostedItemIcon: SUNNYSIDE.animalFoods.kernel_blend,
+    },
+  ],
+  "Volcano Gnome": () => [
+    {
+      shortDescription: translate("description.volcanoGnome.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: SUNNYSIDE.resource.stone,
+    },
+  ],
+
+  Mammoth: () => [
+    {
+      shortDescription: translate("description.mammoth.boost"),
+      labelType: "info",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+      boostedItemIcon: SUNNYSIDE.animals.cowSleeping,
+    },
+  ],
+  "Frozen Sheep": () => [
+    {
+      shortDescription: translate("description.frozen.sheep.boost"),
+      labelType: "vibrant",
+      boostTypeIcon: lightning,
+    },
+  ],
+  Jellyfish: () => [
+    {
+      shortDescription: translate("description.jellyfish.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: SUNNYSIDE.icons.fish,
+    },
+  ],
+  "Anemone Flower": () => [
+    {
+      shortDescription: translate("description.anemoneFlower.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: SUNNYSIDE.icons.fish,
+    },
+  ],
+  "Frozen Cow": () => [
+    {
+      shortDescription: translate("description.frozen.cow.boost"),
+      labelType: "vibrant",
+      boostTypeIcon: lightning,
+    },
+  ],
+  "Summer Chicken": () => [
+    {
+      shortDescription: translate("description.summer.chicken.boost"),
+      labelType: "vibrant",
+      boostTypeIcon: lightning,
+    },
+  ],
+  "Sleepy Chicken": () => [
+    {
+      shortDescription: translate("description.sleepyChicken.boost"),
+      labelType: "vibrant",
+      boostTypeIcon: lightning,
+    },
+  ],
+  "Golden Sheep": () => [
+    {
+      shortDescription: translate("description.goldenSheep.boost"),
+      labelType: "vibrant",
+      boostTypeIcon: lightning,
+      boostedItemIcon: SUNNYSIDE.animalFoods.kernel_blend,
+    },
+  ],
+  "Barn Blueprint": () => [
+    {
+      shortDescription: translate("description.barnBlueprint.boost1"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+    },
+    {
+      shortDescription: translate("description.barnBlueprint.boost2"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+    },
+  ],
+  "Giant Yam": () => [
+    {
+      shortDescription: translate("description.giantYam.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: ITEM_DETAILS.Yam.image,
+    },
+  ],
+  "Giant Zucchini": () => [
+    {
+      shortDescription: translate("description.giantZucchini.boost"),
+      labelType: "info",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+      boostedItemIcon: ITEM_DETAILS.Zucchini.image,
+    },
+  ],
+  "Giant Kale": () => [
+    {
+      shortDescription: translate("description.giantKale.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: ITEM_DETAILS.Kale.image,
+    },
+  ],
+  "Obsidian Turtle": () => [
+    {
+      shortDescription: translate("description.obsidianTurtle.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: ITEM_DETAILS["Obsidian Turtle"].image,
+    },
+  ],
+  Quarry: () => [
+    {
+      shortDescription: translate("description.quarry.boost"),
+      labelType: "vibrant",
+      boostTypeIcon: lightning,
+      boostedItemIcon: ITEM_DETAILS["Stone"].image,
+    },
+  ],
+  "Winter Guardian": () => [
+    {
+      shortDescription: translate("description.winterGuardian.boost"),
+      labelType: "vibrant",
+      boostTypeIcon: lightning,
+    },
+    {
+      shortDescription: translate("description.winterGuardian.boost2"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+    },
+  ],
+  "Autumn Guardian": () => [
+    {
+      shortDescription: translate("description.autumnGuardian.boost"),
+      labelType: "vibrant",
+      boostTypeIcon: lightning,
+    },
+    {
+      shortDescription: translate("description.autumnGuardian.boost2"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+    },
+  ],
+  "Spring Guardian": () => [
+    {
+      shortDescription: translate("description.springGuardian.boost"),
+      labelType: "vibrant",
+      boostTypeIcon: lightning,
+    },
+    {
+      shortDescription: translate("description.springGuardian.boost2"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+    },
+  ],
+  "Summer Guardian": () => [
+    {
+      shortDescription: translate("description.summerGuardian.boost"),
+      labelType: "vibrant",
+      boostTypeIcon: lightning,
+    },
+    {
+      shortDescription: translate("description.summerGuardian.boost2"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+    },
+  ],
+
+  "Nurse Sheep": () => [
+    {
+      shortDescription: translate("description.nurseSheep.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: SUNNYSIDE.animals.sheepSleeping,
+    },
+  ],
+  "Dr Cow": () => [
+    {
+      shortDescription: translate("description.drCow.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: SUNNYSIDE.animals.cowSleeping,
+    },
+  ],
+  "Pink Dolphin": () => [
+    {
+      shortDescription: translate("description.pinkDolphin.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: SUNNYSIDE.icons.fish,
+    },
+  ],
+  Poseidon: () => [
+    {
+      shortDescription: translate("description.poseidon.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: SUNNYSIDE.icons.fish,
+    },
+  ],
+  Toolshed: () => [
+    {
+      shortDescription: translate("description.toolshed.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+    },
+  ],
+  Warehouse: () => [
+    {
+      shortDescription: translate("description.warehouse.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+    },
+  ],
+  "Groovy Gramophone": () => [
+    {
+      shortDescription: translate("description.groovy.gramophone.boost"),
+      labelType: "info",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+      boostedItemIcon: ITEM_DETAILS["Crop Machine"].image,
+    },
+  ],
+  "Giant Onion": () => [
+    {
+      shortDescription: translate("description.giantOnion.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: ITEM_DETAILS["Onion"].image,
+    },
+  ],
+  "Giant Turnip": () => [
+    {
+      shortDescription: translate("description.giantTurnip.boost"),
+      labelType: "info",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+      boostedItemIcon: ITEM_DETAILS["Turnip"].image,
+    },
+  ],
+  "Baby Cow": () => [
+    {
+      shortDescription: translate("description.babyCow.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: SUNNYSIDE.animals.cowSleeping,
+    },
+  ],
+  "Janitor Chicken": () => [
+    {
+      shortDescription: translate("description.janitorChicken.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: SUNNYSIDE.animals.chickenAsleep,
+    },
+  ],
+  "Reelmaster's Chair": () => [
+    {
+      shortDescription: translate("description.reelmastersChair.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: ITEM_DETAILS["Rod"].image,
+    },
+  ],
+  "Fruit Tune Box": () => [
+    {
+      shortDescription: translate("description.fruitTuneBox.boost"),
+      labelType: "info",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+      boostedItemIcon: ITEM_DETAILS["Fruit Patch"].image,
+    },
+  ],
+  "Giant Artichoke": () => [
+    {
+      shortDescription: translate("description.giantArtichoke.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: ITEM_DETAILS["Artichoke"].image,
+    },
+  ],
+  "Farmer's Monument": () => [
+    {
+      shortDescription: translate("description.monument.buff"),
+      labelType: "success",
+      boostTypeIcon: helpIcon,
+    },
+  ],
+  "Woodcutter's Monument": () => [
+    {
+      shortDescription: translate("description.monument.buff"),
+      labelType: "success",
+      boostTypeIcon: helpIcon,
+    },
+  ],
+  "Miner's Monument": () => [
+    {
+      shortDescription: translate("description.monument.buff"),
+      labelType: "success",
+      boostTypeIcon: helpIcon,
+    },
+  ],
+  "Teamwork Monument": () => [
+    {
+      shortDescription: translate("description.monument.buff"),
+      labelType: "success",
+      boostTypeIcon: helpIcon,
+    },
+  ],
+  "Fox Shrine": () => [
+    {
+      shortDescription: translate("description.foxShrine.buff"),
+      labelType: "info",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+      boostedItemIcon: ITEM_DETAILS["Crafting Box"].image,
+    },
+    {
+      shortDescription: translate("description.foxShrine.buff.2"),
+      labelType: "vibrant",
+      boostTypeIcon: lightning,
+      boostedItemIcon: ITEM_DETAILS["Crafting Box"].image,
+    },
+  ],
+  "Boar Shrine": () => [
+    {
+      shortDescription: translate("description.boarShrine.buff"),
+      labelType: "info",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+      boostedItemIcon: chefHat,
+    },
+  ],
+  "Hound Shrine": () => [
+    {
+      shortDescription: translate("description.houndShrine.buff"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+    },
+  ],
+  "Pet Bowls": () => [
+    {
+      shortDescription: translate("description.petBowls.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+    },
+  ],
+  "Stag Shrine": (game) => [
+    {
+      shortDescription: hasFeatureAccess(game, "SPEED_BOOSTS")
+        ? translate("description.stagShrine.buff.speed")
+        : translate("description.stagShrine.buff"),
+      labelType: "info",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+      boostedItemIcon: ITEM_DETAILS.Oil.image,
+    },
+    {
+      shortDescription: translate("description.stagShrine.buff.2"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: ITEM_DETAILS.Oil.image,
+    },
+  ],
+  "Sparrow Shrine": (game) => [
+    {
+      shortDescription: hasFeatureAccess(game, "SPEED_BOOSTS")
+        ? translate("description.sparrowShrine.buff.speed")
+        : translate("description.sparrowShrine.buff"),
+      labelType: "info",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+    },
+  ],
+  "Toucan Shrine": (game) => [
+    {
+      shortDescription: hasFeatureAccess(game, "SPEED_BOOSTS")
+        ? translate("description.toucanShrine.buff.speed")
+        : translate("description.toucanShrine.buff"),
+      labelType: "info",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+    },
+  ],
+  "Collie Shrine": () => [
+    {
+      shortDescription: translate("description.collieShrine.buff"),
+      labelType: "info",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+      boostedItemIcon: SUNNYSIDE.animals.cowSleeping,
+    },
+    {
+      shortDescription: translate("description.collieShrine.buff.2"),
+      labelType: "info",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+      boostedItemIcon: SUNNYSIDE.animals.sheepSleeping,
+    },
+    {
+      shortDescription: translate("description.collieShrine.buff.3"),
+      labelType: "info",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+      boostedItemIcon: SUNNYSIDE.animalFoods.kernel_blend,
+    },
+  ],
+  "Badger Shrine": (game) => [
+    {
+      // Both tree and stone recovery are on the windowed speed model under
+      // SPEED_BOOSTS (trees + mines slices); flag-off keeps the baked discount.
+      shortDescription: hasFeatureAccess(game, "SPEED_BOOSTS")
+        ? translate("description.badgerShrine.buff.speed")
+        : translate("description.badgerShrine.buff"),
+      labelType: "info",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+      boostedItemIcon: ITEM_DETAILS.Tree.image,
+    },
+    {
+      shortDescription: hasFeatureAccess(game, "SPEED_BOOSTS")
+        ? translate("description.badgerShrine.buff.2.speed")
+        : translate("description.badgerShrine.buff.2"),
+      labelType: "info",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+      boostedItemIcon: ITEM_DETAILS.Stone.image,
+    },
+  ],
+  "Legendary Shrine": () => [
+    {
+      shortDescription: translate("description.legendaryShrine.buff"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+    },
+    {
+      shortDescription: translate("description.legendaryShrine.buff.2"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: ITEM_DETAILS["Fruit Patch"].image,
+    },
+    {
+      shortDescription: translate("description.legendaryShrine.buff.3"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: ITEM_DETAILS.Wood.image,
+    },
+    {
+      shortDescription: translate("description.legendaryShrine.buff.4"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: ITEM_DETAILS.Stone.image,
+    },
+    {
+      shortDescription: translate("description.legendaryShrine.buff.5"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: ITEM_DETAILS["Red Pansy"].image,
+    },
+    {
+      shortDescription: translate("description.legendaryShrine.buff.6"),
+      labelType: "info",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+      boostedItemIcon: chefHat,
+    },
+  ],
+  "Obsidian Shrine": () => [
+    {
+      shortDescription: translate("description.obsidianShrine.buff"),
+      labelType: "vibrant",
+      boostTypeIcon: SUNNYSIDE.icons.lightning,
+    },
+  ],
+  "Mole Shrine": (game) => [
+    {
+      shortDescription: hasFeatureAccess(game, "SPEED_BOOSTS")
+        ? translate("description.moleShrine.buff.speed")
+        : translate("description.moleShrine.buff"),
+      labelType: "info",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+      boostedItemIcon: ITEM_DETAILS.Iron.image,
+    },
+    {
+      shortDescription: hasFeatureAccess(game, "SPEED_BOOSTS")
+        ? translate("description.moleShrine.buff.2.speed")
+        : translate("description.moleShrine.buff.2"),
+      labelType: "info",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+      boostedItemIcon: ITEM_DETAILS.Gold.image,
+    },
+    {
+      shortDescription: hasFeatureAccess(game, "SPEED_BOOSTS")
+        ? translate("description.moleShrine.buff.3.speed")
+        : translate("description.moleShrine.buff.3"),
+      labelType: "info",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+      boostedItemIcon: ITEM_DETAILS.Crimstone.image,
+    },
+  ],
+  "Bear Shrine": () => [
+    {
+      shortDescription: translate("description.bearShrine.buff"),
+      labelType: "info",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+      boostedItemIcon: ITEM_DETAILS.Honey.image,
+    },
+    {
+      shortDescription: translate("description.bearShrine.buff.2"),
+      labelType: "vibrant",
+      boostTypeIcon: lightning,
+      boostedItemIcon: bee,
+    },
+  ],
+  "Tortoise Shrine": (game) => [
+    {
+      shortDescription: hasFeatureAccess(game, "SPEED_BOOSTS")
+        ? translate("description.tortoiseShrine.buff.speed")
+        : translate("description.tortoiseShrine.buff"),
+      labelType: "info",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+      boostedItemIcon: ITEM_DETAILS["Greenhouse"].image,
+    },
+    {
+      shortDescription: translate("description.tortoiseShrine.buff.2"),
+      labelType: "info",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+      boostedItemIcon: ITEM_DETAILS["Crop Machine"].image,
+    },
+  ],
+  "Moth Shrine": (game) => [
+    {
+      shortDescription: hasFeatureAccess(game, "SPEED_BOOSTS")
+        ? translate("description.mothShrine.buff.speed")
+        : translate("description.mothShrine.buff"),
+      labelType: "info",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+      boostedItemIcon: ITEM_DETAILS["Red Pansy"].image,
+    },
+    {
+      shortDescription: translate("description.mothShrine.buff.2"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: ITEM_DETAILS["Red Pansy"].image,
+    },
+  ],
+  "Bantam Shrine": () => [
+    {
+      shortDescription: translate("description.bantamShrine.buff"),
+      labelType: "info",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+      boostedItemIcon: SUNNYSIDE.animals.chickenAsleep,
+    },
+    {
+      shortDescription: translate("description.bantamShrine.buff.2"),
+      labelType: "info",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+      boostedItemIcon: SUNNYSIDE.animalFoods.kernel_blend,
+    },
+  ],
+  "Trading Shrine": () => [
+    {
+      shortDescription: translate("description.tradingShrine.buff"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: tradeIcon,
+    },
+  ],
+  "Ancient Tree": () => [
+    {
+      shortDescription: translate("description.ancientTree.buff"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: ITEM_DETAILS.Wood.image,
+    },
+  ],
+  "Sacred Tree": () => [
+    {
+      shortDescription: translate("description.sacredTree.buff"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: ITEM_DETAILS.Wood.image,
+    },
+  ],
+  "Fused Stone Rock": () => [
+    {
+      shortDescription: translate("description.fusedStoneRock.buff"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: ITEM_DETAILS.Stone.image,
+    },
+  ],
+  "Reinforced Stone Rock": () => [
+    {
+      shortDescription: translate("description.reinforcedStoneRock.buff"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: ITEM_DETAILS.Stone.image,
+    },
+  ],
+  "Refined Iron Rock": () => [
+    {
+      shortDescription: translate("description.refinedIronRock.buff"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: ITEM_DETAILS.Iron.image,
+    },
+  ],
+  "Tempered Iron Rock": () => [
+    {
+      shortDescription: translate("description.temperedIronRock.buff"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: ITEM_DETAILS.Iron.image,
+    },
+  ],
+  "Pure Gold Rock": () => [
+    {
+      shortDescription: translate("description.pureGoldRock.buff"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: ITEM_DETAILS.Gold.image,
+    },
+  ],
+  "Prime Gold Rock": () => [
+    {
+      shortDescription: translate("description.primeGoldRock.buff"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: ITEM_DETAILS.Gold.image,
+    },
+  ],
+  "Giant Gold Bone": () => [
+    {
+      shortDescription: translate("description.giantGoldBone.buff"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: ITEM_DETAILS.Cheer.image,
+    },
+  ],
+  "Lunar Temple": () => [
+    {
+      shortDescription: translate("description.lunarTemple.buff"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+    },
+  ],
+  Oaken: () => [
+    {
+      shortDescription: translate("description.oaken.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: SUNNYSIDE.resource.acorn,
+    },
+  ],
+  Meerkat: () => [
+    {
+      shortDescription: translate("description.meerkat.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: SUNNYSIDE.tools.sand_shovel,
+    },
+    {
+      shortDescription: translate("description.meerkat.boost.two"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: ITEM_DETAILS.Sand.image,
+    },
+  ],
+  "Poseidon's Throne": () => [
+    {
+      shortDescription: translate("description.poseidonsThrone.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: ITEM_DETAILS.Weed.image,
+    },
+    {
+      shortDescription: translate("megastore.monument.helpsNeeded", {
+        count: 2000,
+      }),
+      labelType: "info",
+      boostTypeIcon: helpIcon,
+    },
+  ],
+  "Crystal Altar": () => [
+    {
+      shortDescription: translate("description.crystalAltar.boost"),
+      labelType: "info",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+    },
+    {
+      shortDescription: translate("megastore.monument.helpsNeeded", {
+        count: 1000,
+      }),
+      labelType: "info",
+      boostTypeIcon: helpIcon,
+    },
+  ],
+  "Crimstone Clam": () => [
+    {
+      shortDescription: translate("description.crimstoneClam.boost"),
+      labelType: "info",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+      boostedItemIcon: ITEM_DETAILS.Crimstone.image,
+    },
+    {
+      shortDescription: translate("description.crimstoneClam.boost.two"),
+      labelType: "vibrant",
+      boostTypeIcon: lightning,
+    },
+  ],
+  "Magma Stone": () => [
+    {
+      shortDescription: translate("description.magmaStone.buff.one"),
+      labelType: "info",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+      boostedItemIcon: ITEM_DETAILS["Lava Pit"].image,
+    },
+    {
+      shortDescription: translate("description.magmaStone.buff.two"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: ITEM_DETAILS["Obsidian"].image,
+    },
+  ],
+  Cornucopia: () => [
+    {
+      shortDescription: translate("description.cornucopia.buff"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+    },
+    {
+      shortDescription: translate("megastore.monument.helpsNeeded", {
+        count: 1000,
+      }),
+      labelType: "info",
+      boostTypeIcon: helpIcon,
+    },
+  ],
+  Nautilus: () => [
+    {
+      shortDescription: translate("description.nautilus.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: ITEM_DETAILS["Rod"].image,
+    },
+  ],
+  "Salt Sculpture": () => [
+    {
+      shortDescription: translate("description.saltSculpture.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+    },
+  ],
+  "Navigation Table": () => [
+    {
+      shortDescription: translate("description.navigationTable.boost"),
+      labelType: "vibrant",
+      boostTypeIcon: lightning,
+    },
+  ],
+  "Royal Crab Pot": () => [
+    {
+      shortDescription: translate("description.royalCrabPot.boost"),
+      labelType: "vibrant",
+      boostTypeIcon: lightning,
+    },
+  ],
+  "Crab House": () => [
+    {
+      shortDescription: translate("description.crabHouse.boost"),
+      labelType: "vibrant",
+      boostTypeIcon: lightning,
+    },
+  ],
+  "Speed Trap": () => [
+    {
+      shortDescription: translate("description.speedTrap.boost"),
+      labelType: "info",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+    },
+  ],
+  "Flamingo Chicken": () => [
+    {
+      shortDescription: translate("description.flamingoChicken.boost"),
+      labelType: "info",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+      boostedItemIcon: SUNNYSIDE.animals.chickenAsleep,
+    },
+  ],
+  "Spa Sheep": () => [
+    {
+      shortDescription: translate("description.spaSheep.boost"),
+      labelType: "vibrant",
+      boostTypeIcon: lightning,
+      boostedItemIcon: SUNNYSIDE.animals.sheepSleeping,
+    },
+  ],
+  "Spa Cow": () => [
+    {
+      shortDescription: translate("description.spaCow.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: SUNNYSIDE.resource.milk,
+    },
+  ],
+  "Deep Sea Slug": () => [
+    {
+      shortDescription: translate("description.deepSeaSlug.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: ITEM_DETAILS["Rod"].image,
+    },
+    {
+      shortDescription: translate("description.deepSeaSlug.boost.2"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: ITEM_DETAILS["Earthworm"].image,
+    },
+  ],
+  "Salt Crystal Flower": () => [
+    {
+      shortDescription: translate("description.saltCrystalFlower.boost"),
+      labelType: "vibrant",
+      boostTypeIcon: lightning,
+      boostedItemIcon: SUNNYSIDE.icons.plant,
+    },
+  ],
+  Astrolabe: () => [
+    {
+      shortDescription: translate("description.astrolabe.boost"),
+      labelType: "vibrant",
+      boostTypeIcon: lightning,
+    },
+    {
+      shortDescription: translate("description.astrolabe.boost.2"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+    },
+  ],
+  "Ascension Monument": () => [
+    {
+      shortDescription: translate("description.ascensionMonument.boost"),
+      labelType: "info",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+    },
+  ],
+  "Otty the Otter": () => [
+    {
+      shortDescription: translate("description.ottyTheOtter.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: ITEM_DETAILS["Rod"].image,
+    },
+    {
+      shortDescription: translate("description.ottyTheOtter.boost.2"),
+      labelType: "vibrant",
+      boostTypeIcon: lightning,
+      boostedItemIcon: SUNNYSIDE.icons.fish,
+    },
+  ],
+  "Ascended Chicken": () => [
+    {
+      shortDescription: translate("description.ascendedChicken.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: ITEM_DETAILS["Egg"].image,
+    },
+  ],
+  "Ascended Sheep": () => [
+    {
+      shortDescription: translate("description.ascendedSheep.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: ITEM_DETAILS["Wool"].image,
+    },
+  ],
+  "Ascended Cow": () => [
+    {
+      shortDescription: translate("description.ascendedCow.boost"),
+      labelType: "info",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+      boostedItemIcon: SUNNYSIDE.animals.cowSleeping,
+    },
+  ],
+  "Ruins Flower": () => [
+    {
+      shortDescription: translate("description.ruinsFlower.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: ITEM_DETAILS["Honey"].image,
+    },
+  ],
+  "Dumbo Octopus": () => [
+    {
+      shortDescription: translate("description.dumboOctopus.boost"),
+      labelType: "vibrant",
+      boostTypeIcon: lightning,
+      boostedItemIcon: SUNNYSIDE.icons.fish,
+    },
+  ],
+  "Ascended Idol": () => [
+    {
+      shortDescription: translate("description.ascendedIdol.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: ITEM_DETAILS["Salt Rake"].image,
+    },
+  ],
+  "Salt Worker Gnome": () => [
+    {
+      shortDescription: translate("description.saltWorkerGnome.boost"),
+      labelType: "info",
+      boostTypeIcon: SUNNYSIDE.icons.stopwatch,
+      boostedItemIcon: ITEM_DETAILS["Salt"].image,
+    },
+    {
+      shortDescription: translate("description.saltWorkerGnome.boost.2"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: ITEM_DETAILS["Salt"].image,
+    },
+  ],
+  "Winged Vase": () => [
+    {
+      shortDescription: translate("description.wingedVase.boost"),
+      labelType: "vibrant",
+      boostTypeIcon: lightning,
+    },
+  ],
+  Vibraphone: () => [
+    {
+      shortDescription: translate("description.vibraphone.boost"),
+      labelType: "success",
+      boostTypeIcon: powerup,
+      boostedItemIcon: ITEM_DETAILS["Salt Lick"].image,
+    },
+  ],
+
+  // All items go above this line
+
+  ...getKeys(BED_FARMHAND_COUNT).reduce<
+    Record<BedName, (game: GameState) => BuffLabel[]>
+  >(
+    (acc, farmhand) => {
+      acc[farmhand] = () => [
+        {
+          shortDescription: translate("description.pearlBed.boost"),
+          labelType: "vibrant",
+          boostTypeIcon: lightning,
+        },
+      ];
+      return acc;
+    },
+    {} as Record<BedName, (game: GameState) => BuffLabel[]>,
+  ),
+
+  ...Object.fromEntries(
+    getObjectEntries(CHAPTER_TICKET_BOOST_ITEMS)
+      .filter(([chapter]) => getCurrentChapter(Date.now()) === chapter)
+      .flatMap(([chapter, items]) => {
+        const ticket = getChapterTicket(CHAPTERS[chapter].startDate.getTime());
+        const translationKey =
+          `description.bonus${ticket.replace(/\s+/g, "")}.boost` as TranslationKeys;
+
+        return Object.values(items)
+          .filter(isCollectible)
+          .map((item) => [
+            item,
+            [
+              {
+                shortDescription: translate(translationKey),
+                labelType: "success",
+                boostTypeIcon: powerup,
+                boostedItemIcon: ITEM_DETAILS[ticket].image,
+              },
+            ],
+          ]);
+      }),
+  ),
+};

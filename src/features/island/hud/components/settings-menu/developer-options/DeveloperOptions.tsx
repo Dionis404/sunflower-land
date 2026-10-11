@@ -1,0 +1,79 @@
+import { Button } from "components/ui/Button";
+import { useAppTranslation } from "lib/i18n/useAppTranslations";
+import React, { useContext } from "react";
+import { useNavigate } from "react-router";
+import type { ContentComponentProps } from "../types";
+import { CONFIG } from "lib/config";
+import { Context as GameContext } from "features/game/GameProvider";
+import { hasFeatureAccess } from "lib/flags";
+import { useSelector } from "@xstate/react";
+
+export const DeveloperOptions: React.FC<ContentComponentProps> = ({
+  onSubMenuClick,
+  onClose,
+  onTimeMachineToggle,
+}) => {
+  const { gameService, setFromRoute } = useContext(GameContext);
+  const { t } = useAppTranslation();
+  const navigate = useNavigate();
+  const game = useSelector(gameService, (state) => state.context.state);
+  const hasAdminDashboards = hasFeatureAccess(game, "ADMIN_DASHBOARDS");
+
+  const goTo = (path: string) => {
+    onClose();
+    setFromRoute(window.location.hash.replace("#", "") || "/");
+    navigate(path);
+  };
+
+  const hasAirdrop = hasFeatureAccess(game, "AIRDROP_PLAYER");
+  const isModerator = hasFeatureAccess(game, "MODERATOR");
+
+  return (
+    <>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
+        <Button className="p-1" onClick={() => onSubMenuClick("apiKey")}>
+          <span>{t("share.apiKey")}</span>
+        </Button>
+        {hasAirdrop && (
+          <Button className="p-1" onClick={() => onSubMenuClick("admin")}>
+            <span>{`Airdrop Player`}</span>
+          </Button>
+        )}
+        {isModerator && (
+          <Button
+            onClick={() => onSubMenuClick("playerSearch")}
+            className="p-1"
+          >
+            {`Player Search`}
+          </Button>
+        )}
+        {isModerator && (
+          <Button onClick={() => onSubMenuClick("errorSearch")} className="p-1">
+            {`Error Search`}
+          </Button>
+        )}
+        {hasAdminDashboards && (
+          <>
+            <Button
+              onClick={() => goTo("/game/economy-dashboard")}
+              className="p-1"
+            >
+              {`Economy Dashboard`}
+            </Button>
+            <Button
+              onClick={() => goTo("/game/retention-dashboard")}
+              className="p-1"
+            >
+              {`Retention Dashboard`}
+            </Button>
+          </>
+        )}
+        {CONFIG.NETWORK === "amoy" && (
+          <Button onClick={onTimeMachineToggle} className="p-1">
+            {t("gameOptions.developerOptions.timeMachine")}
+          </Button>
+        )}
+      </div>
+    </>
+  );
+};
